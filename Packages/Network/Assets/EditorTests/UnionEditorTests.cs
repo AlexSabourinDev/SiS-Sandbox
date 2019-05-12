@@ -1,5 +1,6 @@
-﻿using NUnit.Framework;
-using System;
+﻿using System;
+using UnityEngine;
+using NUnit.Framework;
 
 namespace Game.Networking
 {
@@ -216,6 +217,43 @@ namespace Game.Networking
 
             union = new DoubleUnion() { B0 = 0x00, B1 = 0x00, B2 = 0x00, B3 = 0xC0, B4 = 0x3D, B5 = 0xE1, B6 = 0x01, B7 = 0x40 };
             Assert.AreEqual(2.234981060028076171875, union.Value);
+        }
+
+        [Test]
+        public void TestGC()
+        {
+            long before = 0;
+            long after = 0;
+
+            long dtBitConverter = 0;
+            long dtUnion = 0;
+
+            int iterations = 1000000;
+
+            GC.Collect();
+            before = GC.GetTotalMemory(false);
+            for (int i = 0; i < iterations; ++i)
+            {
+                var union = new IntUnion() { Value = i };
+            }
+            after = GC.GetTotalMemory(false);
+            dtUnion = after - before;
+
+            GC.Collect();
+            before = GC.GetTotalMemory(false);
+            for (int i = 0; i < iterations; ++i)
+            {
+                byte[] bytes = BitConverter.GetBytes(i);
+            }
+            after = GC.GetTotalMemory(false);
+            dtBitConverter = after - before;
+
+            // Although unlikely it could be possible for this test to fail if the editor is running background threads allocating a bunch of memory
+            // while we convert integers to bytes via unions or if the GC decides to collect right after we finish converting integers to bytes via
+            // BitConverter.
+            Assert.That(dtBitConverter > dtUnion, "Union somehow used more memory than bitconverter!");
+            Debug.Log($"[TestGC] Union Bytes={dtUnion}");
+            Debug.Log($"[TestGC] BitConverter Bytes={dtBitConverter}");
         }
     }
 }
