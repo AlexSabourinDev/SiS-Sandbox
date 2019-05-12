@@ -1,0 +1,10 @@
+{
+  "name": "com.game.network",
+  "displayName": "Game Networking",
+  "version": "1.0.0",
+  "unity": "2019.1",
+  "description": "A networking library for unity.",
+  "dependencies": {
+      "com.game.logger" : "1.0.0"
+  }
+}

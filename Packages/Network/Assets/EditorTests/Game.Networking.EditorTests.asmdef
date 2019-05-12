@@ -1,0 +1,19 @@
+{
+    "name": "Game.Networking.EditorTests",
+    "references": [
+        "GUID:fc9c51a1640b4104f9702a73b7ad2619"
+    ],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": []
+}
