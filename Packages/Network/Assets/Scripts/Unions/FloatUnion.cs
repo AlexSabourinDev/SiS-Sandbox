@@ -6,6 +6,8 @@ namespace Game.Networking
     public struct FloatUnion
     {
         [FieldOffset(0)]
+        public int Integer;
+        [FieldOffset(0)]
         public float Value;
         [FieldOffset(0)]
         public byte B0;
@@ -15,5 +17,15 @@ namespace Game.Networking
         public byte B2;
         [FieldOffset(3)]
         public byte B3;
+
+        public static float ToFloat(int value)
+        {
+            return new FloatUnion() { Integer = value }.Value;
+        }
+
+        public static int ToInteger(float value)
+        {
+            return new FloatUnion() { Value = value }.Integer;
+        }
     }
 }

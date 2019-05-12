@@ -6,6 +6,8 @@ namespace Game.Networking
     public struct DoubleUnion
     {
         [FieldOffset(0)]
+        private long Integer;
+        [FieldOffset(0)]
         public double Value;
         [FieldOffset(0)]
         public byte B0;
@@ -23,5 +25,15 @@ namespace Game.Networking
         public byte B6;
         [FieldOffset(7)]
         public byte B7;
+
+        public static double ToDouble(long value)
+        {
+            return new DoubleUnion() { Integer = value }.Value;
+        }
+
+        public static long ToInteger(double value)
+        {
+            return new DoubleUnion() { Value = value }.Integer;
+        }
     }
 }
