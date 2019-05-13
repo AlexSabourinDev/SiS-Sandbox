@@ -37,4 +37,6 @@ I think it'd be cool to attempt a world streaming system in Unity. I've always w
 - Jared MoocDoonoold
 
 ## Features
-None yet!
+- 3D Character control
+- Object collection
+- Travis Martin
