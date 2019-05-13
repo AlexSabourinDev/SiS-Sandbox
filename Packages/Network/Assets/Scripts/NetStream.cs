@@ -17,7 +17,10 @@ namespace Game.Networking
     ///                    ^                ^                 ^---- Bit Buffer
     ///                    |                +---------------------- Byte Buffer
     ///                    +--------------------------------------- Bit Buffer Length
-    ///                    
+    ///           
+    /// todo: Currently we assume byte order to be little endian, there needs to be checks for big endian and a way to convert 
+    ///       to little endian. (Since big endian isn't as popular anymore and I don't believe windows supports it i'll defer doing 
+    ///       that till later.)
     /// </summary>
     public class NetStream
     {
@@ -56,6 +59,16 @@ namespace Game.Networking
 
         // Just a state that is set when the stream is 'opened'
         protected bool m_IsReading = false;
+
+
+        /// <summary>
+        /// Returns the state of the stream on whether or not it is reading data from the stream or writing data to the stream.
+        /// </summary>
+        public bool IsReading { get { return m_IsReading; } private set { m_IsReading = value; } }
+        /// <summary>
+        /// Returns the bytes that would be returned when the stream closes
+        /// </summary>
+        public int Count { get { return m_ByteBuffer.Count + m_BitBuffer.Count + (m_BitCursor == BIT_CURSOR_END ? 0 : 1) + 4; } }
 
 
         /// <summary>
@@ -99,11 +112,11 @@ namespace Game.Networking
             }
 
             // Set Mode:
-            m_IsReading = data != null;
+            IsReading = data != null;
             m_ByteBufferReadCursor = 0;
             m_BitBufferReadCursor = 0;
             m_WorkingBits = 0;
-            if (m_IsReading)
+            if (IsReading)
             {
                 m_BitCursor = BIT_CURSOR_REND;
             }
@@ -125,7 +138,7 @@ namespace Game.Networking
         public byte[] Close()
         {
             byte[] result = null;
-            if (!m_IsReading)
+            if (!IsReading)
             {
                 FlushBits();
                 int bitBufferLength = m_BitBuffer.Count;
@@ -152,7 +165,7 @@ namespace Game.Networking
             m_WorkingBits = 0;
             m_BitCursor = BIT_CURSOR_REND;
             m_BitBufferReadCursor = -1;
-            m_IsReading = false;
+            IsReading = false;
             return result;
         }
 
@@ -162,7 +175,7 @@ namespace Game.Networking
         /// <param name="value">The value to be read/written</param>
         public void Serialize(ref bool value)
         {
-            if (m_IsReading)
+            if (IsReading)
             {
                 if (m_BitCursor < 0)
                 {
@@ -186,12 +199,12 @@ namespace Game.Networking
         }
 
         /// <summary>
-        /// Serializes a byte value
+        /// Reads/Writes a single byte to the stream.
         /// </summary>
         /// <param name="value">The value to be read/written</param>
         public void Serialize(ref byte value)
         {
-            if (m_IsReading)
+            if (IsReading)
             {
                 if (m_ByteBufferReadCursor >= m_ByteBuffer.Count)
                 {
@@ -207,7 +220,7 @@ namespace Game.Networking
         }
 
         /// <summary>
-        /// Serializes first number of bits based on the argument 'bits'
+        /// Reads/Writes a fixed number of bits of the value to the stream.
         /// 
         /// note:
         ///     If bits >= sizeof(value) then the data is serialized as if called Serialize
@@ -227,7 +240,7 @@ namespace Game.Networking
                 return;
             }
 
-            if (m_IsReading)
+            if (IsReading)
             {
                 if (m_BitCursor < 0)
                 {
@@ -281,7 +294,93 @@ namespace Game.Networking
                     m_BitCursor -= remainderBits;
                 }
             }
+        }
+        
+        public void Serialize(ref sbyte value)
+        {
+            var union = new SByteUnion();
+            if(IsReading)
+            {
+                Serialize(ref union.B0);
+                value = union.Value;
+            }
+            else
+            {
+                union.Value = value;
+                Serialize(ref union.B0);
+            }
+        }
 
+        public void Serialize(ref char value)
+        {
+            var union = new CharUnion();
+            if (IsReading)
+            {
+                if ((m_ByteBufferReadCursor + sizeof(char)) >= m_ByteBuffer.Count)
+                {
+                    throw new IndexOutOfRangeException(READ_EXCEPTION_MSG);
+                }
+
+                union.B0 = m_ByteBuffer[m_ByteBufferReadCursor + 0];
+                union.B1 = m_ByteBuffer[m_ByteBufferReadCursor + 1];
+                value = union.Value;
+
+                m_ByteBufferReadCursor += sizeof(char);
+            }
+            else
+            {
+                union.Value = value;
+                m_ByteBuffer.Add(union.B0);
+                m_ByteBuffer.Add(union.B1);
+            }
+        }
+
+        public void Serialize(ref short value)
+        {
+            var union = new ShortUnion();
+            if (IsReading)
+            {
+                if ((m_ByteBufferReadCursor + sizeof(short)) >= m_ByteBuffer.Count)
+                {
+                    throw new IndexOutOfRangeException(READ_EXCEPTION_MSG);
+                }
+
+                union.B0 = m_ByteBuffer[m_ByteBufferReadCursor + 0];
+                union.B1 = m_ByteBuffer[m_ByteBufferReadCursor + 1];
+                value = union.Value;
+
+                m_ByteBufferReadCursor += sizeof(short);
+            }
+            else
+            {
+                union.Value = value;
+                m_ByteBuffer.Add(union.B0);
+                m_ByteBuffer.Add(union.B1);
+            }
+        }
+
+        public void Serialize(ref ushort value)
+        {
+            var union = new UShortUnion();
+            if (IsReading)
+            {
+                if ((m_ByteBufferReadCursor + sizeof(ushort)) >= m_ByteBuffer.Count)
+                {
+                    throw new IndexOutOfRangeException(READ_EXCEPTION_MSG);
+                }
+
+                union.B0 = m_ByteBuffer[m_ByteBufferReadCursor + 0];
+                union.B1 = m_ByteBuffer[m_ByteBufferReadCursor + 1];
+                value = union.Value;
+
+                m_ByteBufferReadCursor += sizeof(ushort);
+            }
+            else
+            {
+                union.Value = value;
+                m_ByteBuffer.Add(union.B0);
+                m_ByteBuffer.Add(union.B1);
+            }
         }
 
         /// <summary>
@@ -290,36 +389,618 @@ namespace Game.Networking
         /// <param name="value">The value to be read/written</param>
         public void Serialize(ref int value)
         {
-            if (m_IsReading)
+            var union = new IntUnion();
+
+            if (IsReading)
             {
-                if ((m_ByteBufferReadCursor + 4) >= m_ByteBuffer.Count)
+                if ((m_ByteBufferReadCursor + sizeof(int)) >= m_ByteBuffer.Count)
                 {
                     throw new IndexOutOfRangeException(READ_EXCEPTION_MSG);
                 }
 
-                value = m_ByteBuffer[m_ByteBufferReadCursor + 0] << 24 |
-                        m_ByteBuffer[m_ByteBufferReadCursor + 1] << 16 |
-                        m_ByteBuffer[m_ByteBufferReadCursor + 2] << 8 |
-                        m_ByteBuffer[m_ByteBufferReadCursor + 3];
-                m_ByteBufferReadCursor += 4;
+                union.B0 = m_ByteBuffer[m_ByteBufferReadCursor + 0];
+                union.B1 = m_ByteBuffer[m_ByteBufferReadCursor + 1];
+                union.B2 = m_ByteBuffer[m_ByteBufferReadCursor + 2];
+                union.B3 = m_ByteBuffer[m_ByteBufferReadCursor + 3];
+                value = union.Value;
+
+                m_ByteBufferReadCursor += sizeof(int);
             }
             else
             {
-                m_ByteBuffer.Add((byte)((value >> 24) & 0xFF));
-                m_ByteBuffer.Add((byte)((value >> 16) & 0xFF));
-                m_ByteBuffer.Add((byte)((value >> 8) & 0xFF));
-                m_ByteBuffer.Add((byte)(value & 0xFF));
+                union.Value = value;
+                m_ByteBuffer.Add(union.B0);
+                m_ByteBuffer.Add(union.B1);
+                m_ByteBuffer.Add(union.B2);
+                m_ByteBuffer.Add(union.B3);
             }
         }
 
+        public void Serialize(ref uint value)
+        {
+            var union = new UIntUnion();
+
+            if (IsReading)
+            {
+                if ((m_ByteBufferReadCursor + sizeof(uint)) >= m_ByteBuffer.Count)
+                {
+                    throw new IndexOutOfRangeException(READ_EXCEPTION_MSG);
+                }
+
+                union.B0 = m_ByteBuffer[m_ByteBufferReadCursor + 0];
+                union.B1 = m_ByteBuffer[m_ByteBufferReadCursor + 1];
+                union.B2 = m_ByteBuffer[m_ByteBufferReadCursor + 2];
+                union.B3 = m_ByteBuffer[m_ByteBufferReadCursor + 3];
+                value = union.Value;
+
+                m_ByteBufferReadCursor += sizeof(uint);
+            }
+            else
+            {
+                union.Value = value;
+                m_ByteBuffer.Add(union.B0);
+                m_ByteBuffer.Add(union.B1);
+                m_ByteBuffer.Add(union.B2);
+                m_ByteBuffer.Add(union.B3);
+            }
+        }
+
+        public void Serialize(ref long value)
+        {
+            var union = new LongUnion();
+
+            if (IsReading)
+            {
+                if ((m_ByteBufferReadCursor + sizeof(long)) >= m_ByteBuffer.Count)
+                {
+                    throw new IndexOutOfRangeException(READ_EXCEPTION_MSG);
+                }
+
+                union.B0 = m_ByteBuffer[m_ByteBufferReadCursor + 0];
+                union.B1 = m_ByteBuffer[m_ByteBufferReadCursor + 1];
+                union.B2 = m_ByteBuffer[m_ByteBufferReadCursor + 2];
+                union.B3 = m_ByteBuffer[m_ByteBufferReadCursor + 3];
+                union.B4 = m_ByteBuffer[m_ByteBufferReadCursor + 4];
+                union.B5 = m_ByteBuffer[m_ByteBufferReadCursor + 5];
+                union.B6 = m_ByteBuffer[m_ByteBufferReadCursor + 6];
+                union.B7 = m_ByteBuffer[m_ByteBufferReadCursor + 7];
+                value = union.Value;
+
+                m_ByteBufferReadCursor += sizeof(long);
+            }
+            else
+            {
+                union.Value = value;
+                m_ByteBuffer.Add(union.B0);
+                m_ByteBuffer.Add(union.B1);
+                m_ByteBuffer.Add(union.B2);
+                m_ByteBuffer.Add(union.B3);
+                m_ByteBuffer.Add(union.B4);
+                m_ByteBuffer.Add(union.B5);
+                m_ByteBuffer.Add(union.B6);
+                m_ByteBuffer.Add(union.B7);
+            }
+        }
+
+        public void Serialize(ref ulong value)
+        {
+            var union = new ULongUnion();
+
+            if (IsReading)
+            {
+                if ((m_ByteBufferReadCursor + sizeof(ulong)) >= m_ByteBuffer.Count)
+                {
+                    throw new IndexOutOfRangeException(READ_EXCEPTION_MSG);
+                }
+
+                union.B0 = m_ByteBuffer[m_ByteBufferReadCursor + 0];
+                union.B1 = m_ByteBuffer[m_ByteBufferReadCursor + 1];
+                union.B2 = m_ByteBuffer[m_ByteBufferReadCursor + 2];
+                union.B3 = m_ByteBuffer[m_ByteBufferReadCursor + 3];
+                union.B4 = m_ByteBuffer[m_ByteBufferReadCursor + 4];
+                union.B5 = m_ByteBuffer[m_ByteBufferReadCursor + 5];
+                union.B6 = m_ByteBuffer[m_ByteBufferReadCursor + 6];
+                union.B7 = m_ByteBuffer[m_ByteBufferReadCursor + 7];
+                value = union.Value;
+
+                m_ByteBufferReadCursor += sizeof(ulong);
+            }
+            else
+            {
+                union.Value = value;
+                m_ByteBuffer.Add(union.B0);
+                m_ByteBuffer.Add(union.B1);
+                m_ByteBuffer.Add(union.B2);
+                m_ByteBuffer.Add(union.B3);
+                m_ByteBuffer.Add(union.B4);
+                m_ByteBuffer.Add(union.B5);
+                m_ByteBuffer.Add(union.B6);
+                m_ByteBuffer.Add(union.B7);
+            }
+        }
+
+        public void Serialize(ref float value)
+        {
+            var union = new FloatUnion();
+
+            if (IsReading)
+            {
+                if ((m_ByteBufferReadCursor + sizeof(float)) >= m_ByteBuffer.Count)
+                {
+                    throw new IndexOutOfRangeException(READ_EXCEPTION_MSG);
+                }
+
+                union.B0 = m_ByteBuffer[m_ByteBufferReadCursor + 0];
+                union.B1 = m_ByteBuffer[m_ByteBufferReadCursor + 1];
+                union.B2 = m_ByteBuffer[m_ByteBufferReadCursor + 2];
+                union.B3 = m_ByteBuffer[m_ByteBufferReadCursor + 3];
+                value = union.Value;
+
+                m_ByteBufferReadCursor += sizeof(float);
+            }
+            else
+            {
+                union.Value = value;
+                m_ByteBuffer.Add(union.B0);
+                m_ByteBuffer.Add(union.B1);
+                m_ByteBuffer.Add(union.B2);
+                m_ByteBuffer.Add(union.B3);
+            }
+        }
+
+        public void Serialize(ref double value)
+        {
+            var union = new DoubleUnion();
+
+            if (IsReading)
+            {
+                if ((m_ByteBufferReadCursor + sizeof(double)) >= m_ByteBuffer.Count)
+                {
+                    throw new IndexOutOfRangeException(READ_EXCEPTION_MSG);
+                }
+
+                union.B0 = m_ByteBuffer[m_ByteBufferReadCursor + 0];
+                union.B1 = m_ByteBuffer[m_ByteBufferReadCursor + 1];
+                union.B2 = m_ByteBuffer[m_ByteBufferReadCursor + 2];
+                union.B3 = m_ByteBuffer[m_ByteBufferReadCursor + 3];
+                union.B4 = m_ByteBuffer[m_ByteBufferReadCursor + 4];
+                union.B5 = m_ByteBuffer[m_ByteBufferReadCursor + 5];
+                union.B6 = m_ByteBuffer[m_ByteBufferReadCursor + 6];
+                union.B7 = m_ByteBuffer[m_ByteBufferReadCursor + 7];
+                value = union.Value;
+
+                m_ByteBufferReadCursor += sizeof(double);
+            }
+            else
+            {
+                union.Value = value;
+                m_ByteBuffer.Add(union.B0);
+                m_ByteBuffer.Add(union.B1);
+                m_ByteBuffer.Add(union.B2);
+                m_ByteBuffer.Add(union.B3);
+                m_ByteBuffer.Add(union.B4);
+                m_ByteBuffer.Add(union.B5);
+                m_ByteBuffer.Add(union.B6);
+                m_ByteBuffer.Add(union.B7);
+            }
+        }
+
+        public void SerializeBits(ref sbyte value, uint bits)
+        {
+            if(bits == 0)
+            {
+                return;
+            }
+            if(bits >= 8)
+            {
+                Serialize(ref value);
+                return;
+            }
+            var union = new SByteUnion() { Value = value };
+            SerializeBits(ref union.B0, bits);
+            value = union.Value;
+        }
+
+        public void SerializeBits(ref short value, uint bits)
+        {
+            if (bits == 0)
+            {
+                return;
+            }
+            if (bits >= 16)
+            {
+                Serialize(ref value);
+                return;
+            }
+            var union = new ShortUnion() { Value = value };
+            if (bits > 8)
+            {
+                Serialize(ref union.B0);
+                SerializeBits(ref union.B1, GetRemainderBits(16, bits));
+            }
+            else
+            {
+                SerializeBits(ref union.B0, bits);
+            }
+            value = union.Value;
+        }
+
+        public void SerializeBits(ref ushort value, uint bits)
+        {
+            if (bits == 0)
+            {
+                return;
+            }
+            if (bits >= 16)
+            {
+                Serialize(ref value);
+                return;
+            }
+            var union = new UShortUnion() { Value = value };
+            if (bits > 8)
+            {
+                Serialize(ref union.B0);
+                SerializeBits(ref union.B1, GetRemainderBits(16, bits));
+            }
+            else
+            {
+                SerializeBits(ref union.B0, bits);
+            }
+            value = union.Value;
+        }
+
+        public void SerializeBits(ref int value, uint bits)
+        {
+            if (bits == 0)
+            {
+                return;
+            }
+            if (bits >= 32)
+            {
+                Serialize(ref value);
+                return;
+            }
+            var union = new IntUnion() { Value = value };
+            if(bits > 24)
+            {
+                Serialize(ref union.B0);
+                Serialize(ref union.B1);
+                Serialize(ref union.B2);
+                SerializeBits(ref union.B3, GetRemainderBits(32, bits));
+            }
+            else if(bits > 16)
+            {
+                Serialize(ref union.B0);
+                Serialize(ref union.B1);
+                SerializeBits(ref union.B2, GetRemainderBits(24, bits));
+            }
+            else if(bits > 8)
+            {
+                Serialize(ref union.B0);
+                SerializeBits(ref union.B1, GetRemainderBits(16, bits));
+            }
+            else
+            {
+                SerializeBits(ref union.B0, bits);
+            }
+            value = union.Value;
+        }
+
+        public void SerializeBits(ref uint value, uint bits)
+        {
+            if (bits == 0)
+            {
+                return;
+            }
+            if (bits >= 32)
+            {
+                Serialize(ref value);
+                return;
+            }
+            var union = new UIntUnion() { Value = value };
+            if (bits > 24)
+            {
+                Serialize(ref union.B0);
+                Serialize(ref union.B1);
+                Serialize(ref union.B2);
+                SerializeBits(ref union.B3, GetRemainderBits(32, bits));
+            }
+            else if (bits > 16)
+            {
+                Serialize(ref union.B0);
+                Serialize(ref union.B1);
+                SerializeBits(ref union.B2, GetRemainderBits(24, bits));
+            }
+            else if (bits > 8)
+            {
+                Serialize(ref union.B0);
+                SerializeBits(ref union.B1, GetRemainderBits(16, bits));
+            }
+            else
+            {
+                SerializeBits(ref union.B0, bits);
+            }
+            value = union.Value;
+        }
+
+        public void SerializeBits(ref long value, uint bits)
+        {
+            if (bits == 0)
+            {
+                return;
+            }
+            if (bits >= 64)
+            {
+                Serialize(ref value);
+                return;
+            }
+            var union = new LongUnion() { Value = value };
+            if(bits > 56)
+            {
+                Serialize(ref union.B0);
+                Serialize(ref union.B1);
+                Serialize(ref union.B2);
+                Serialize(ref union.B3);
+                Serialize(ref union.B4);
+                Serialize(ref union.B5);
+                Serialize(ref union.B6);
+                SerializeBits(ref union.B7, GetRemainderBits(64, bits));
+            }
+            else if(bits > 48)
+            {
+                Serialize(ref union.B0);
+                Serialize(ref union.B1);
+                Serialize(ref union.B2);
+                Serialize(ref union.B3);
+                Serialize(ref union.B4);
+                Serialize(ref union.B5);
+                SerializeBits(ref union.B6, GetRemainderBits(56, bits));
+            }
+            else if(bits > 40)
+            {
+                Serialize(ref union.B0);
+                Serialize(ref union.B1);
+                Serialize(ref union.B2);
+                Serialize(ref union.B3);
+                Serialize(ref union.B4);
+                SerializeBits(ref union.B5, GetRemainderBits(48, bits));
+            }
+            else if(bits > 32)
+            {
+                Serialize(ref union.B0);
+                Serialize(ref union.B1);
+                Serialize(ref union.B2);
+                Serialize(ref union.B3);
+                SerializeBits(ref union.B4, GetRemainderBits(40, bits));
+            }
+            if (bits > 24)
+            {
+                Serialize(ref union.B0);
+                Serialize(ref union.B1);
+                Serialize(ref union.B2);
+                SerializeBits(ref union.B3, GetRemainderBits(32, bits));
+            }
+            else if (bits > 16)
+            {
+                Serialize(ref union.B0);
+                Serialize(ref union.B1);
+                SerializeBits(ref union.B2, GetRemainderBits(24, bits));
+            }
+            else if (bits > 8)
+            {
+                Serialize(ref union.B0);
+                SerializeBits(ref union.B1, GetRemainderBits(16, bits));
+            }
+            else
+            {
+                SerializeBits(ref union.B0, bits);
+            }
+            value = union.Value;
+        }
+
+        public void SerializeBits(ref ulong value, uint bits)
+        {
+            if (bits == 0)
+            {
+                return;
+            }
+            if (bits >= 64)
+            {
+                Serialize(ref value);
+                return;
+            }
+            var union = new ULongUnion() { Value = value };
+            if (bits > 56)
+            {
+                Serialize(ref union.B0);
+                Serialize(ref union.B1);
+                Serialize(ref union.B2);
+                Serialize(ref union.B3);
+                Serialize(ref union.B4);
+                Serialize(ref union.B5);
+                Serialize(ref union.B6);
+                SerializeBits(ref union.B7, GetRemainderBits(64, bits));
+            }
+            else if (bits > 48)
+            {
+                Serialize(ref union.B0);
+                Serialize(ref union.B1);
+                Serialize(ref union.B2);
+                Serialize(ref union.B3);
+                Serialize(ref union.B4);
+                Serialize(ref union.B5);
+                SerializeBits(ref union.B6, GetRemainderBits(56, bits));
+            }
+            else if (bits > 40)
+            {
+                Serialize(ref union.B0);
+                Serialize(ref union.B1);
+                Serialize(ref union.B2);
+                Serialize(ref union.B3);
+                Serialize(ref union.B4);
+                SerializeBits(ref union.B5, GetRemainderBits(48, bits));
+            }
+            else if (bits > 32)
+            {
+                Serialize(ref union.B0);
+                Serialize(ref union.B1);
+                Serialize(ref union.B2);
+                Serialize(ref union.B3);
+                SerializeBits(ref union.B4, GetRemainderBits(40, bits));
+            }
+            if (bits > 24)
+            {
+                Serialize(ref union.B0);
+                Serialize(ref union.B1);
+                Serialize(ref union.B2);
+                SerializeBits(ref union.B3, GetRemainderBits(32, bits));
+            }
+            else if (bits > 16)
+            {
+                Serialize(ref union.B0);
+                Serialize(ref union.B1);
+                SerializeBits(ref union.B2, GetRemainderBits(24, bits));
+            }
+            else if (bits > 8)
+            {
+                Serialize(ref union.B0);
+                SerializeBits(ref union.B1, GetRemainderBits(16, bits));
+            }
+            else
+            {
+                SerializeBits(ref union.B0, bits);
+            }
+            value = union.Value;
+        }
+
+        public void SerializeBits(ref float value, uint bits)
+        {
+            if (bits == 0)
+            {
+                return;
+            }
+            if (bits >= 32)
+            {
+                Serialize(ref value);
+                return;
+            }
+            var union = new FloatUnion() { Value = value };
+            if (bits > 24)
+            {
+                Serialize(ref union.B0);
+                Serialize(ref union.B1);
+                Serialize(ref union.B2);
+                SerializeBits(ref union.B3, GetRemainderBits(32, bits));
+            }
+            else if (bits > 16)
+            {
+                Serialize(ref union.B0);
+                Serialize(ref union.B1);
+                SerializeBits(ref union.B2, GetRemainderBits(24, bits));
+            }
+            else if (bits > 8)
+            {
+                Serialize(ref union.B0);
+                SerializeBits(ref union.B1, GetRemainderBits(16, bits));
+            }
+            else
+            {
+                SerializeBits(ref union.B0, bits);
+            }
+            value = union.Value;
+        }
+
         /// <summary>
-        /// Returns the state of the stream on whether or not it is reading data from the stream or writing data to the stream.
+        /// 
         /// </summary>
-        public bool IsReading { get { return m_IsReading; } }
+        /// <param name="value"></param>
+        /// <param name="bits"></param>
+        public void SerializeBits(ref double value, uint bits)
+        {
+            if (bits == 0)
+            {
+                return;
+            }
+            if (bits >= 64)
+            {
+                Serialize(ref value);
+                return;
+            }
+            var union = new DoubleUnion() { Value = value };
+            if (bits > 56)
+            {
+                Serialize(ref union.B0);
+                Serialize(ref union.B1);
+                Serialize(ref union.B2);
+                Serialize(ref union.B3);
+                Serialize(ref union.B4);
+                Serialize(ref union.B5);
+                Serialize(ref union.B6);
+                SerializeBits(ref union.B7, GetRemainderBits(64, bits));
+            }
+            else if (bits > 48)
+            {
+                Serialize(ref union.B0);
+                Serialize(ref union.B1);
+                Serialize(ref union.B2);
+                Serialize(ref union.B3);
+                Serialize(ref union.B4);
+                Serialize(ref union.B5);
+                SerializeBits(ref union.B6, GetRemainderBits(56, bits));
+            }
+            else if (bits > 40)
+            {
+                Serialize(ref union.B0);
+                Serialize(ref union.B1);
+                Serialize(ref union.B2);
+                Serialize(ref union.B3);
+                Serialize(ref union.B4);
+                SerializeBits(ref union.B5, GetRemainderBits(48, bits));
+            }
+            else if (bits > 32)
+            {
+                Serialize(ref union.B0);
+                Serialize(ref union.B1);
+                Serialize(ref union.B2);
+                Serialize(ref union.B3);
+                SerializeBits(ref union.B4, GetRemainderBits(40, bits));
+            }
+            if (bits > 24)
+            {
+                Serialize(ref union.B0);
+                Serialize(ref union.B1);
+                Serialize(ref union.B2);
+                SerializeBits(ref union.B3, GetRemainderBits(32, bits));
+            }
+            else if (bits > 16)
+            {
+                Serialize(ref union.B0);
+                Serialize(ref union.B1);
+                SerializeBits(ref union.B2, GetRemainderBits(24, bits));
+            }
+            else if (bits > 8)
+            {
+                Serialize(ref union.B0);
+                SerializeBits(ref union.B1, GetRemainderBits(16, bits));
+            }
+            else
+            {
+                SerializeBits(ref union.B0, bits);
+            }
+            value = union.Value;
+        }
+
+        
         /// <summary>
-        /// Returns the bytes that would be returned when the stream closes
+        /// 
         /// </summary>
-        public int Count { get { return m_ByteBuffer.Count + m_BitBuffer.Count + (m_BitCursor == BIT_CURSOR_END ? 0 : 1) + 4; } }
+        /// <param name="totalBits"></param>
+        /// <param name="bits"></param>
+        /// <returns></returns>
+        private uint GetRemainderBits(uint totalBits, uint bits)
+        {
+            return 8 - (totalBits - bits);
+        }
 
         /// <summary>
         /// Pops the next bitfield off the bit buffer.
@@ -339,7 +1020,7 @@ namespace Game.Networking
         /// </summary>
         private void FlushBits()
         {
-            if (m_IsReading)
+            if (IsReading)
             {
                 return;
             }

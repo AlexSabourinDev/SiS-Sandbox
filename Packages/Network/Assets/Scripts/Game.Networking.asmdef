@@ -1,3 +1,15 @@
-﻿{
-	"name": "Game.Networking"
+{
+    "name": "Game.Networking",
+    "references": [
+        "GUID:4d2719f7e5f7ffc45b83f1811645f0d0"
+    ],
+    "optionalUnityReferences": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": []
 }
