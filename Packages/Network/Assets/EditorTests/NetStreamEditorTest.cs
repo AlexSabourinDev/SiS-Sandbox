@@ -1,4 +1,8 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.IO;
+using System.Runtime.Serialization.Formatters.Binary;
+using System.Collections.Generic;
+using UnityEngine;
 using NUnit.Framework;
 
 namespace Game.Networking
@@ -123,6 +127,58 @@ namespace Game.Networking
                 ns.SerializeBits(ref U64_40, 40);
                 ns.SerializeBits(ref F32_18, 18);
                 ns.SerializeBits(ref D64_24, 24);
+            }
+
+            public void FatSerialize(MemoryStream ms, BinaryFormatter fmt)
+            {
+                fmt.Serialize(ms, U8);
+                fmt.Serialize(ms, S8);
+                fmt.Serialize(ms, S16Char);
+                fmt.Serialize(ms, S16Short);
+                fmt.Serialize(ms, U16Short);
+                fmt.Serialize(ms, S32);
+                fmt.Serialize(ms, U32);
+                fmt.Serialize(ms, S64);
+                fmt.Serialize(ms, U64);
+                fmt.Serialize(ms, F32);
+                fmt.Serialize(ms, D64);
+
+                fmt.Serialize(ms, U8_6);
+                fmt.Serialize(ms, S8_5);
+                fmt.Serialize(ms, S16_15);
+                fmt.Serialize(ms, U16_12);
+                fmt.Serialize(ms, S32_31);
+                fmt.Serialize(ms, U32_28);
+                fmt.Serialize(ms, S64_55);
+                fmt.Serialize(ms, U64_40);
+                fmt.Serialize(ms, F32_18);
+                fmt.Serialize(ms, D64_24);
+            }
+
+            public void FatSerialize(BinaryWriter bw, MemoryStream ms)
+            {
+                bw.Write(U8);
+                bw.Write(S8);
+                bw.Write(S16Char);
+                bw.Write(S16Short);
+                bw.Write(U16Short);
+                bw.Write(S32);
+                bw.Write(U32);
+                bw.Write(S64);
+                bw.Write(U64);
+                bw.Write(F32);
+                bw.Write(D64);
+
+                bw.Write(U8_6);
+                bw.Write(S8_5);
+                bw.Write(S16_15);
+                bw.Write(U16_12);
+                bw.Write(S32_31);
+                bw.Write(U32_28);
+                bw.Write(S64_55);
+                bw.Write(U64_40);
+                bw.Write(F32_18);
+                bw.Write(D64_24);
             }
         }
 
@@ -512,6 +568,79 @@ namespace Game.Networking
             Assert.AreEqual(real.U64_40, output.U64_40);
             Assert.AreEqual(real.F32_18, output.F32_18);
             Assert.AreEqual(real.D64_24, output.D64_24);
+        }
+
+        [Test]
+        public void CompareMemoryStream()
+        {
+            const int OBJECT_COUNT = 24;
+
+            long formatterMemoryUsage = 0;
+            long writerMemoryUsage = 0;
+            long netStreamMemoryUsage = 0;
+
+            long before = 0;
+            long after = 0;
+
+            StubObject stub = new StubObject();
+            stub.PopulateCorrect();
+
+            GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, true, true);
+            before = GC.GetTotalMemory(false);
+            byte[] formatterBytes = null;
+            using (MemoryStream ms = new MemoryStream())
+            {
+                BinaryFormatter fmt = new BinaryFormatter();
+                for(int i = 0; i < OBJECT_COUNT; ++i)
+                {
+                    stub.FatSerialize(ms, fmt);
+                }
+                ms.Flush();
+                formatterBytes = ms.ToArray();
+            }
+            after = GC.GetTotalMemory(false);
+            formatterMemoryUsage = after - before;
+
+            GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, true, true);
+            before = GC.GetTotalMemory(false);
+            byte[] writerBytes = null;
+            using (MemoryStream ms = new MemoryStream())
+            {
+                using (BinaryWriter bw = new BinaryWriter(ms))
+                {
+                    for(int i = 0; i < OBJECT_COUNT; ++i)
+                    {
+                        stub.FatSerialize(bw, ms);
+                    }
+                    ms.Flush();
+                    writerBytes = ms.ToArray();
+                }
+            }
+            after = GC.GetTotalMemory(false);
+            writerMemoryUsage = after - before;
+
+            GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, true, true);
+            before = GC.GetTotalMemory(false);
+            byte[] bytes = null;
+            NetStream ns = new NetStream();
+            ns.Open(null);
+            for(int i = 0; i < OBJECT_COUNT; ++i)
+            {
+                stub.NetSerialize(ns);
+            }
+            bytes = ns.Close();
+            after = GC.GetTotalMemory(false);
+            netStreamMemoryUsage = after - before;
+
+            // note: The memory usage stat pretty much means nothing when running in unity, would need a much simpler environment where objects aren't being allocated
+            //       on multiple threads.
+            Debug.Log($"[CompareMemoryStream] Disregard MemoryUsage if ran from unity as we have no guarantee how much memory is being used in that environment.");
+            Debug.Log($"[CompareMemoryStream] BinaryFormatter: BufferLength={formatterBytes.Length}, MemoryUsage={formatterMemoryUsage}");
+            Debug.Log($"[CompareMemoryStream]    BinaryWriter: BufferLength={writerBytes.Length}, MemoryUsage={writerMemoryUsage}");
+            Debug.Log($"[CompareMemoryStream]       NetStream: BufferLength={bytes.Length}, MemoryUsage={netStreamMemoryUsage}");
+            Assert.IsTrue(bytes.Length <= formatterBytes.Length, "NetStream is worse than BinaryFormatter!");
+            Assert.IsTrue(bytes.Length <= writerBytes.Length, "NetStream is worse than BinaryWriter!");
+
         }
     }
 }
