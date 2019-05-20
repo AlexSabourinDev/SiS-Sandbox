@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text;
 using System.Collections.Generic;
 
 namespace Game.Networking
@@ -21,15 +22,12 @@ namespace Game.Networking
     /// todo: Currently we assume byte order to be little endian, there needs to be checks for big endian and a way to convert 
     ///       to little endian. (Since big endian isn't as popular anymore and I don't believe windows supports it i'll defer doing 
     ///       that till later.)
+    /// todo: Currently read streams copy the 'data', it would be cool if we could just use it and index into that data correctly.
+    /// todo: Support writing to preallocated buffer of bytes?
     /// </summary>
     public class NetStream
     {
         private const string READ_EXCEPTION_MSG = "The NetStream cannot read bytes off the end of the byte-buffer.";
-
-        // Value for the 'last' index of a bitmask which has the length of a byte.
-        protected const int BIT_CURSOR_END = 7;
-        // Value for the 'one before first' index of the bit mask.
-        protected const int BIT_CURSOR_REND = -1;
         // Bitmask table we when reading/writing bits to the bit buffer.
         private readonly int[] BIT_MASK = new int[]
                 {
@@ -43,6 +41,12 @@ namespace Game.Networking
                     0x7F, //   01111111
                     0xFF  // FULL WRITE
                 };
+        // Value for the 'last' index of a bitmask which has the length of a byte.
+        protected const int BIT_CURSOR_END = 7;
+        // Value for the 'one before first' index of the bit mask.
+        protected const int BIT_CURSOR_REND = -1;
+
+        public const int HEADER_SIZE = 4;
 
         // A container of bytes written or 'parsed' and read from.
         protected List<byte> m_ByteBuffer = new List<byte>();
@@ -78,7 +82,7 @@ namespace Game.Networking
         /// otherwise its opened for read.
         /// </summary>
         /// <param name="data">Data that will be written to objects calling any of the Serialize functions</param>
-        public void Open(byte[] data = null)
+        public void Open(byte[] data = null, uint offset = 0)
         {
             if (data == null)
             {
@@ -90,16 +94,22 @@ namespace Game.Networking
             }
             else
             {
+                if(offset > data.Length)
+                {
+                    throw new ArgumentException("Argument 'offset' cannot be greater than the data.Length");
+                }
+
                 m_ByteBuffer = new List<byte>();
                 m_BitBuffer = new List<byte>();
-                if (data.Length >= 4)
+                if ((data.Length - offset) >= 4)
                 {
-                    int bitBufferLength = data[0] << 24 | data[1] << 16 | data[2] << 8 | data[3];
-                    int byteBufferLength = data.Length - (4 + bitBufferLength);
+                    IntUnion bitBufferLengthBytes = new IntUnion() { B0 = data[offset + 0], B1 = data[offset + 1], B2 = data[offset + 2], B3 = data[offset + 3] };
+                    int bitBufferLength = bitBufferLengthBytes.Value;
+                    int byteBufferLength = data.Length - ((int)offset + 4 + bitBufferLength);
                     m_ByteBuffer.Capacity = byteBufferLength;
                     m_BitBuffer.Capacity = bitBufferLength;
 
-                    int cursor = 4;
+                    uint cursor = offset + 4;
                     for (int i = 0; i < byteBufferLength; ++i)
                     {
                         m_ByteBuffer.Add(data[cursor++]);
@@ -143,10 +153,12 @@ namespace Game.Networking
                 FlushBits();
                 int bitBufferLength = m_BitBuffer.Count;
                 result = new byte[m_ByteBuffer.Count + bitBufferLength + 4];
-                result[0] = (byte)((bitBufferLength >> 24) & 0xFF);
-                result[1] = (byte)((bitBufferLength >> 16) & 0xFF);
-                result[2] = (byte)((bitBufferLength >> 8) & 0xFF);
-                result[3] = (byte)(bitBufferLength & 0xFF);
+                IntUnion bitBufferLengthBytes = new IntUnion() { Value = bitBufferLength };
+
+                result[0] = bitBufferLengthBytes.B0;
+                result[1] = bitBufferLengthBytes.B1;
+                result[2] = bitBufferLengthBytes.B2;
+                result[3] = bitBufferLengthBytes.B3;
 
                 int cursor = 4;
                 for (int i = 0; i < m_ByteBuffer.Count; ++i)
@@ -316,7 +328,7 @@ namespace Game.Networking
             var union = new CharUnion();
             if (IsReading)
             {
-                if ((m_ByteBufferReadCursor + sizeof(char)) >= m_ByteBuffer.Count)
+                if ((m_ByteBufferReadCursor + sizeof(char)) > m_ByteBuffer.Count)
                 {
                     throw new IndexOutOfRangeException(READ_EXCEPTION_MSG);
                 }
@@ -340,7 +352,7 @@ namespace Game.Networking
             var union = new ShortUnion();
             if (IsReading)
             {
-                if ((m_ByteBufferReadCursor + sizeof(short)) >= m_ByteBuffer.Count)
+                if ((m_ByteBufferReadCursor + sizeof(short)) > m_ByteBuffer.Count)
                 {
                     throw new IndexOutOfRangeException(READ_EXCEPTION_MSG);
                 }
@@ -364,7 +376,7 @@ namespace Game.Networking
             var union = new UShortUnion();
             if (IsReading)
             {
-                if ((m_ByteBufferReadCursor + sizeof(ushort)) >= m_ByteBuffer.Count)
+                if ((m_ByteBufferReadCursor + sizeof(ushort)) > m_ByteBuffer.Count)
                 {
                     throw new IndexOutOfRangeException(READ_EXCEPTION_MSG);
                 }
@@ -393,7 +405,7 @@ namespace Game.Networking
 
             if (IsReading)
             {
-                if ((m_ByteBufferReadCursor + sizeof(int)) >= m_ByteBuffer.Count)
+                if ((m_ByteBufferReadCursor + sizeof(int)) > m_ByteBuffer.Count)
                 {
                     throw new IndexOutOfRangeException(READ_EXCEPTION_MSG);
                 }
@@ -422,7 +434,7 @@ namespace Game.Networking
 
             if (IsReading)
             {
-                if ((m_ByteBufferReadCursor + sizeof(uint)) >= m_ByteBuffer.Count)
+                if ((m_ByteBufferReadCursor + sizeof(uint)) > m_ByteBuffer.Count)
                 {
                     throw new IndexOutOfRangeException(READ_EXCEPTION_MSG);
                 }
@@ -451,7 +463,7 @@ namespace Game.Networking
 
             if (IsReading)
             {
-                if ((m_ByteBufferReadCursor + sizeof(long)) >= m_ByteBuffer.Count)
+                if ((m_ByteBufferReadCursor + sizeof(long)) > m_ByteBuffer.Count)
                 {
                     throw new IndexOutOfRangeException(READ_EXCEPTION_MSG);
                 }
@@ -488,7 +500,7 @@ namespace Game.Networking
 
             if (IsReading)
             {
-                if ((m_ByteBufferReadCursor + sizeof(ulong)) >= m_ByteBuffer.Count)
+                if ((m_ByteBufferReadCursor + sizeof(ulong)) > m_ByteBuffer.Count)
                 {
                     throw new IndexOutOfRangeException(READ_EXCEPTION_MSG);
                 }
@@ -525,7 +537,7 @@ namespace Game.Networking
 
             if (IsReading)
             {
-                if ((m_ByteBufferReadCursor + sizeof(float)) >= m_ByteBuffer.Count)
+                if ((m_ByteBufferReadCursor + sizeof(float)) > m_ByteBuffer.Count)
                 {
                     throw new IndexOutOfRangeException(READ_EXCEPTION_MSG);
                 }
@@ -554,7 +566,7 @@ namespace Game.Networking
 
             if (IsReading)
             {
-                if ((m_ByteBufferReadCursor + sizeof(double)) >= m_ByteBuffer.Count)
+                if ((m_ByteBufferReadCursor + sizeof(double)) > m_ByteBuffer.Count)
                 {
                     throw new IndexOutOfRangeException(READ_EXCEPTION_MSG);
                 }
@@ -582,6 +594,59 @@ namespace Game.Networking
                 m_ByteBuffer.Add(union.B5);
                 m_ByteBuffer.Add(union.B6);
                 m_ByteBuffer.Add(union.B7);
+            }
+        }
+
+        public void Serialize(ref string value, Encoding encoding = null)
+        {
+            if(encoding == null)
+            {
+                encoding = Encoding.ASCII;
+            }
+
+            if(IsReading)
+            {
+                int length = 0;
+                Serialize(ref length);
+                byte[] bytes = new byte[length];
+                for(int i = 0; i < bytes.Length; ++i)
+                {
+                    Serialize(ref bytes[i]);
+                }
+                value = encoding.GetString(bytes);
+            }
+            else
+            {
+                byte[] bytes = encoding.GetBytes(value);
+                int length = bytes.Length;
+                Serialize(ref length);
+                for(int i = 0; i < bytes.Length; ++i)
+                {
+                    Serialize(ref bytes[i]);
+                }
+            }
+        }
+
+        public void Serialize(ref byte[] value)
+        {
+            if(IsReading)
+            {
+                int length = 0;
+                Serialize(ref length);
+                value = new byte[length];
+                for(int i = 0; i < value.Length; ++i)
+                {
+                    Serialize(ref value[i]);
+                }
+            }
+            else
+            {
+                int length = value == null ? 0 : value.Length;
+                Serialize(ref length);
+                for(int i = 0; i < length; ++i)
+                {
+                    Serialize(ref value[i]);
+                }
             }
         }
 
@@ -990,7 +1055,6 @@ namespace Game.Networking
             value = union.Value;
         }
 
-        
         /// <summary>
         /// 
         /// </summary>

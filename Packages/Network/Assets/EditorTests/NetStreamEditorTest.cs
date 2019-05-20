@@ -9,21 +9,6 @@ namespace Game.Networking
 {
     public class NetStreamEditorTest
     {
-        public class MockNetStream : NetStream
-        {
-            public List<byte> ByteBuffer { get { return m_ByteBuffer; } }
-            public int ByteBufferReadCursor { get { return m_ByteBufferReadCursor; } }
-            public List<byte> BitBuffer { get { return m_BitBuffer; } }
-            public byte WorkingBits { get { return m_WorkingBits; } }
-            public int BitBufferReadCursor { get { return m_BitBufferReadCursor; } }
-            public int BitCursor { get { return m_BitCursor; } }
-
-            public int WorkingBitLength { get { return BitCursor < 0 ? 0 : CursorEnd - BitCursor; } }
-
-            public int CursorEnd { get { return BIT_CURSOR_END; } }
-            public int CursorRend { get { return BIT_CURSOR_REND; } }
-        }
-
         public struct StubObject
         {
             public byte   U8;
@@ -568,6 +553,58 @@ namespace Game.Networking
             Assert.AreEqual(real.U64_40, output.U64_40);
             Assert.AreEqual(real.F32_18, output.F32_18);
             Assert.AreEqual(real.D64_24, output.D64_24);
+        }
+
+        [Test]
+        public void BugFixReadExactBufferSize()
+        {
+            uint byte4 = 0xADCAD123;
+            ulong byte8 = 0xDEADCAED13374004;
+
+            MockNetStream ns = new MockNetStream();
+            ns.Open();
+            ns.Serialize(ref byte4);
+            ns.Serialize(ref byte8);
+            byte[] bytes = ns.Close();
+
+            byte4 = 0;
+            byte8 = 0;
+
+            ns.Open(bytes);
+            Exception thrownException = null;
+            try
+            {
+                ns.Serialize(ref byte4);
+                ns.Serialize(ref byte8);
+            }
+            catch(Exception exception)
+            {
+                thrownException = exception;
+            }
+            ns.Close();
+
+            Assert.AreEqual(null, thrownException);
+            Assert.AreEqual(0xADCAD123, byte4);
+            Assert.AreEqual(0xDEADCAED13374004, byte8);
+        }
+
+        [Test]
+        public void SerializeString()
+        {
+            string message = "~I am a big jam donut~";
+
+            NetStream ns = new NetStream();
+            ns.Open();
+            ns.Serialize(ref message);
+            byte[] bytes = ns.Close();
+
+            string result = string.Empty;
+            ns.Open(bytes);
+            ns.Serialize(ref result);
+            ns.Close();
+
+            Assert.AreEqual(message, result);
+
         }
 
         [Test]
