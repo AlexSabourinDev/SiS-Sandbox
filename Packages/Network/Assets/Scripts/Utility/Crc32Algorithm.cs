@@ -1,4 +1,4 @@
-﻿using System.Text;
+﻿using System;
 
 namespace Game.Networking
 {
@@ -80,10 +80,20 @@ namespace Game.Networking
              0xB40BBE37,  0xC30C8EA1,  0x5A05DF1B,  0x2D02EF8D
         };
 
-        public static uint Compute(byte[] data)
+        public static uint Compute(byte[] data, int offset = 0)
         {
+            if(offset < 0)
+            {
+                throw new ArgumentException("Invalid argument 'offset', it cannot be less than zero.");
+            }
+
+            if(data == null)
+            {
+                throw new ArgumentNullException("Argument 'data' is null.");
+            }
+
             uint crc32 = 0xFFFFFFFF;
-            for (int i = 0; i < data.Length; ++i)
+            for (int i = offset; i < data.Length; ++i)
             {
                 int index = (int)(crc32 ^ data[i]) & 0xFF;
                 crc32 = (crc32 >> 8) ^ CRC_32_TABLE[index];
