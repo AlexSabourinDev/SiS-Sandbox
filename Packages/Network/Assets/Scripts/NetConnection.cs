@@ -9,6 +9,7 @@ namespace Game.Networking
         private byte[]      m_UID = null;
 
         public IPEndPoint EndPoint { get { return m_EndPoint; } }
+        public string EndPointString { get { return m_EndPoint != null ? m_EndPoint.ToString() : string.Empty; } }
         public string Identifier { get { return m_Identifier; } }
         public byte[] UID { get { return m_UID; } }
 

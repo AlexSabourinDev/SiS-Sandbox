@@ -32,7 +32,7 @@ namespace Game.Networking
         {
             if (packetData == null || packetData.Length < (Crc32Offset + NetStream.HEADER_SIZE))
             {
-                throw new InvalidOperationException("RemoteMethodPacket cannot calculate Crc32 if the data has not been written yet.");
+                throw new InvalidOperationException("Packet cannot calculate Crc32 if the data has not been written yet.");
             }
 
             uint crc32 = Crc32Algorithm.Compute(packetData, Crc32Offset + NetStream.HEADER_SIZE);
@@ -48,7 +48,7 @@ namespace Game.Networking
         {
             if (packetData == null || packetData.Length < (Crc32Offset + NetStream.HEADER_SIZE))
             {
-                throw new InvalidOperationException("RemoteMethodPacket cannot verify Crc32 if the data has not been written yet.");
+                throw new InvalidOperationException("Packet cannot verify Crc32 if the data has not been written yet.");
             }
 
             uint crc32 = Crc32Algorithm.Compute(packetData, Crc32Offset + NetStream.HEADER_SIZE);
