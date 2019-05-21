@@ -1,6 +1,6 @@
 ﻿namespace Game.Networking
 {
-    public struct DisconnectPacket
+    public struct DisconnectPacket : IProtocolPacket
     {
         public const int Crc32Offset = 6;
 

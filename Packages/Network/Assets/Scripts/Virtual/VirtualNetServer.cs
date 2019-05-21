@@ -17,18 +17,13 @@ namespace Game.Networking
             public IVirtualNode Sender { get; set; }
             public byte[] Buffer { get; set; }
         }
-        private struct PacketProcessor
-        {
-            public Thread m_Thread;
-            public ConcurrentQueue<VirtualReceiveResult> m_Queue;
-        }
 
         private volatile int m_State = (int)ServerState.Shutdown;
         private VirtualNetwork m_Socket = null;
-        private PacketProcessor[] m_PacketProcessors = null;
         private List<INetConnection> m_Connections = new List<INetConnection>();
         private readonly object m_ConnectionLock = new object();
         private int m_MaxConnections = 100;
+        private PacketProcessor<VirtualReceiveResult> m_PacketProcessor = new PacketProcessor<VirtualReceiveResult>();
 
 
         public ServerState State
@@ -52,26 +47,23 @@ namespace Game.Networking
             }
             VirtualAddress = address;
 
-            m_PacketProcessors = new PacketProcessor[NUM_PROTOCOLS];
-            m_PacketProcessors[(int)Protocol.FileTransfer] = new PacketProcessor() { m_Thread = new Thread(ProcessFileTransfers), m_Queue = new ConcurrentQueue<VirtualReceiveResult>() };
-            m_PacketProcessors[(int)Protocol.RemoteMethod] = new PacketProcessor() { m_Thread = new Thread(ProcessRemoteMethods), m_Queue = new ConcurrentQueue<VirtualReceiveResult>() };
-            m_PacketProcessors[(int)Protocol.Replication] = new PacketProcessor() { m_Thread = new Thread(ProcessReplications), m_Queue = new ConcurrentQueue<VirtualReceiveResult>() };
-            m_PacketProcessors[(int)Protocol.WebRequest] = new PacketProcessor() { m_Thread = new Thread(ProcessWebRequests), m_Queue = new ConcurrentQueue<VirtualReceiveResult>() };
-            m_PacketProcessors[(int)Protocol.Connect] = new PacketProcessor() { m_Thread = new Thread(ProcessConnections), m_Queue = new ConcurrentQueue<VirtualReceiveResult>() };
-            m_PacketProcessors[(int)Protocol.Disconnect] = new PacketProcessor() { m_Thread = new Thread(ProcessDisconnect), m_Queue = new ConcurrentQueue<VirtualReceiveResult>() };
+            m_PacketProcessor = new PacketProcessor<VirtualReceiveResult>();
+            m_PacketProcessor.Start(new Action<VirtualReceiveResult>[]
+            {
+                null, // None
+                null, // FileTransfer
+                null, // WebRequest
+                null, // RemoteMethod
+                null, // Replication
+                null, // Shutdown
+                CreateProtocolRoute<ConnectPacket>(ProcessConnectPacket, Protocol.Connect),          // Connect
+                CreateProtocolRoute<DisconnectPacket>(ProcessDisconnectPacket, Protocol.Disconnect), // Disconnect
+                null  // Acknowledgement
+            });
 
             State = ServerState.Running;
             network.Connect(this);
             m_Socket = network;
-            for(int i = 0; i < m_PacketProcessors.Length; ++i)
-            {
-                Thread thread = m_PacketProcessors[i].m_Thread;
-                if(thread != null)
-                {
-                    thread.Name = "Packet_Processor";
-                    thread.Start();
-                }
-            }
         }
 
         public void Close(ShutdownType shutdownType)
@@ -97,15 +89,7 @@ namespace Game.Networking
 
             // Wait for the message to be received then disconnect
             while (State != ServerState.ShuttingDown) { }
-
-            for(int i = 0; i < m_PacketProcessors.Length; ++i)
-            {
-                if(m_PacketProcessors[i].m_Thread != null)
-                {
-                    m_PacketProcessors[i].m_Thread.Join();
-                }
-            }
-
+            m_PacketProcessor.Stop();
             m_Socket.Disconnect(this);
             VirtualAddress = string.Empty;
             m_Socket = null;
@@ -128,12 +112,7 @@ namespace Game.Networking
                 }
                 else if(protocol != Protocol.None && sender != null)
                 {
-                    var queue = GetQueue(protocol);
-                    if(queue != null)
-                    {
-                        queue.Enqueue(new VirtualReceiveResult() { Sender = sender, Buffer = data });
-                    }
-                    else
+                    if(!m_PacketProcessor.Enqueue(protocol, new VirtualReceiveResult() { Sender = sender, Buffer = data}))
                     {
                         Log.Debug($"Ignoring message from protocol {protocol} from {sender.VirtualAddress}");
                     }
@@ -141,97 +120,20 @@ namespace Game.Networking
             }
         }
 
-        private void ProcessFileTransfers()
+        private Action<VirtualReceiveResult> CreateProtocolRoute<PacketT>(Action<PacketT, IVirtualNode> callback, Protocol protocol) where PacketT : IProtocolPacket, new()
         {
-            Log.Debug("Start processing file transfer packets...");
-            while (State == ServerState.Running || State == ServerState.WaitingForSocket)
+            return (VirtualReceiveResult result) =>
             {
-
-            }
-            Log.Debug("Stop processing file transfer packets...");
-        }
-
-        private void ProcessWebRequests()
-        {
-            Log.Debug("Start processing file transfer packets...");
-            while (State == ServerState.Running || State == ServerState.WaitingForSocket)
-            {
-
-            }
-            Log.Debug("Stop processing web request packets...");
-        }
-
-        private void ProcessRemoteMethods()
-        {
-            Log.Debug("Start processing remote method packets...");
-
-            ConcurrentQueue<VirtualReceiveResult> queue = GetQueue(Protocol.RemoteMethod);
-            while (State == ServerState.Running || State == ServerState.WaitingForSocket)
-            {
-                
-            }
-            Log.Debug("Stop processing remote method packets...");
-        }
-
-        private void ProcessReplications()
-        {
-            Log.Debug("Start processing replication packets...");
-            while (State == ServerState.Running || State == ServerState.WaitingForSocket)
-            {
-
-            }
-            Log.Debug("Stop processing replication packets...");
-        }
-
-        private void ProcessConnections()
-        {
-            Log.Debug("Start processing connnect packets...");
-            ConcurrentQueue<VirtualReceiveResult> queue = GetQueue(Protocol.Connect);
-            while (State == ServerState.Running || State == ServerState.WaitingForSocket)
-            {
-                VirtualReceiveResult result;
-                if(queue.TryDequeue(out result))
+                PacketT packet = new PacketT();
+                if (packet.Read(result.Buffer))
                 {
-                    ConnectPacket packet = new ConnectPacket();
-                    if(packet.Read(result.Buffer))
-                    {
-                        ProcessConnectPacket(packet, result.Sender);
-                    }
-                    else
-                    {
-                        OnDiscardCorruptPacket(Protocol.Connect, result.Buffer, result.Sender);
-                    }
+                    callback(packet, result.Sender);
                 }
-            }
-            Log.Debug("Stop processing connnect packets...");
-        }
-
-        private void ProcessDisconnect()
-        {
-            Log.Debug("Start processing disconnect packets...");
-            ConcurrentQueue<VirtualReceiveResult> queue = GetQueue(Protocol.Disconnect);
-            while (State == ServerState.Running || State == ServerState.WaitingForSocket)
-            {
-                VirtualReceiveResult result;
-                if(queue.TryDequeue(out result))
+                else
                 {
-                    DisconnectPacket packet = new DisconnectPacket();
-                    if(packet.Read(result.Buffer))
-                    {
-                        ProcessDisconnectPacket(packet, result.Sender);
-                    }
-                    else
-                    {
-                        OnDiscardCorruptPacket(Protocol.Connect, result.Buffer, result.Sender);
-                    }
+                    OnDiscardCorruptPacket(Protocol.Connect, result.Buffer, result.Sender);
                 }
-            }
-            Log.Debug("Stop processing disconnect packets...");
-        }
-
-        private ConcurrentQueue<VirtualReceiveResult> GetQueue(Protocol protocol)
-        {
-            return m_PacketProcessors[(int)protocol].m_Queue;
+            };
         }
 
         private INetConnection CreateConnection(IVirtualNode endPoint, string identifier)

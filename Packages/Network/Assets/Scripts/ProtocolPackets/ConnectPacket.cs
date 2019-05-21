@@ -2,7 +2,7 @@
 
 namespace Game.Networking
 {
-    public struct ConnectPacket
+    public struct ConnectPacket : IProtocolPacket
     {
         public const int Crc32Offset = 6;
 
