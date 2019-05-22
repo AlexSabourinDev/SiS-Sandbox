@@ -18,8 +18,8 @@ namespace Game.Networking
                 return true;
             }
 
-#if UNITY_ENGINE
-            if(arg is UnityEngine.Object)
+#if UNITY_STANDALONE || UNITY_EDITOR
+            if (arg is UnityEngine.Object)
             {
                 // todo: May need additional checks to make sure this is thread-safe.. or even 'Unity Thread Safe'
                 return (UnityEngine.Object)arg;
