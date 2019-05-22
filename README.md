@@ -39,3 +39,8 @@ Siiiiii - Sandbox is a studio-wide Unity project that is intended to be used as 
 ### SubScene Streaming
 - An incomplete streaming feature is included into the project. It works simply by referencing streaming "cells" that are defined by subscenes. Loading and unloading these subscenes is already supported by Unity's subscene workflow, as a result, the system is simply a driver that determines which subscenes are to be loaded and unloaded.
 - It is in an incomplete state because it requires using their ECS infrastructure which makes it difficult to interop with the rest of Unity's infrastructure. Maybe in the future when ECS is more fully fledged. Maybe something else could be introduced in the future instead. For now, this feature is being shelved as is.
+
+#### Resources
+- http://s3.crashworks.org/gdc15/ElanRuskin_SunsetOverdrive_Streaming_notes.pdf
+- https://web.archive.org/web/20160315045908/http://scottbilas.com/files/2003/gdc_san_jose/continuous_world_paper.pdf
+- https://www.gamasutra.com/view/feature/130186/streaming_for_next_generation_games.php
