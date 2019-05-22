@@ -8,20 +8,11 @@ Siiiiii - Sandbox is a studio-wide Unity project that is intended to be used as 
 - Share. Share your brain smarts with others, this project is an attempt to increase collaboration and overall studio knowledge.
 
 ## Proposed Features
-### Streaming Proposal
-I think it'd be cool to attempt a world streaming system in Unity. I've always wondered how it could be tackled efficiently in Unity. I'd be happy to hear other's experiences!
-- Visual streaming blocks
-- Create and remove blocks easily
-- World Manager?
-- Alex Sabouringtorulethemall
-- Devin Sheephurdur
-
 ### Networking
 - How to improve usability?
 - Do we want to check out the new Unity multiplayer package?
 - Potential Resources:
 - [Gaffer On Games](https://gafferongames.com/)
-- Alex Sabouringtorulethemall
 - Nathan Hanlan
 
 ### Rendering
@@ -36,7 +27,15 @@ I think it'd be cool to attempt a world streaming system in Unity. I've always w
 - Don't know yet.
 - Jared MoocDoonoold
 
+### 3D Character control
+- What dis?
+
+### Object collection
+- What dis?
+
 ## Features
-- 3D Character control
-- Object collection
 - Travis Martin
+
+### SubScene Streaming
+- An incomplete streaming feature is included into the project. It works simply by referencing streaming "cells" that are defined by subscenes. Loading and unloading these subscenes is already supported by Unity's subscene workflow, as a result, the system is simply a driver that determines which subscenes are to be loaded and unloaded.
+- It is in an incomplete state because it requires using their ECS infrastructure which makes it difficult to interop with the rest of Unity's infrastructure. Maybe in the future when ECS is more fully fledged. Maybe something else could be introduced in the future instead. For now, this feature is being shelved as is.
