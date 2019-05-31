@@ -36,13 +36,13 @@ namespace Game.Networking
             ns.Open();
             NetSerialize(ns);
             byte[] bytes = ns.Close();
-            CalcCrc32(bytes);
+            Crc32 = NetUtil.SignCrc32Packet(bytes);
             return bytes;
         }
 
         public bool Read(byte[] bytes)
         {
-            if(!VerifyCrc32(bytes))
+            if(!NetUtil.VerifyCrc32Packet(bytes))
             {
                 return false;
             }
@@ -75,42 +75,6 @@ namespace Game.Networking
                 ProtocolType = (Protocol)type;
                 Flags = (ProtocolFlags)flags;
             }
-        }
-
-        private void CalcCrc32(byte[] data)
-        {
-
-            if (data == null || data.Length < (Crc32Offset + NetStream.HEADER_SIZE))
-            {
-                throw new InvalidOperationException("RemoteMethodPacket cannot calculate Crc32 if the data has not been written yet.");
-            }
-
-            Crc32 = Crc32Algorithm.Compute(data, Crc32Offset + NetStream.HEADER_SIZE);
-            UIntUnion crc = new UIntUnion() { Value = Crc32 };
-            data[NetStream.HEADER_SIZE + 2] = crc.B0;
-            data[NetStream.HEADER_SIZE + 3] = crc.B1;
-            data[NetStream.HEADER_SIZE + 4] = crc.B2;
-            data[NetStream.HEADER_SIZE + 5] = crc.B3;
-        }
-
-        private bool VerifyCrc32(byte[] data)
-        {
-
-            if (data == null || data.Length < (Crc32Offset + NetStream.HEADER_SIZE))
-            {
-                throw new InvalidOperationException("RemoteMethodPacket cannot verify Crc32 if the data has not been written yet.");
-            }
-
-            uint crc32 = Crc32Algorithm.Compute(data, Crc32Offset + NetStream.HEADER_SIZE);
-            UIntUnion crc32Bytes = new UIntUnion()
-            {
-                B0 = data[NetStream.HEADER_SIZE + 2],
-                B1 = data[NetStream.HEADER_SIZE + 3],
-                B2 = data[NetStream.HEADER_SIZE + 4],
-                B3 = data[NetStream.HEADER_SIZE + 5]
-            };
-
-            return crc32 == crc32Bytes.Value;
         }
     }
 }

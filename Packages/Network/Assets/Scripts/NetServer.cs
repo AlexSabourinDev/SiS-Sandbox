@@ -12,33 +12,26 @@ namespace Game.Networking
     public class NetServer : INetServer
     {
         private static readonly int NUM_PROTOCOLS = Enum.GetValues(typeof(Protocol)).Length;
-
-        private struct PacketProcessor
+        private struct ReceiveResult
         {
-            public Thread m_Thread;
-            public ConcurrentQueue<UdpReceiveResult> m_Queue;
+            public IPEndPoint Sender { get; set; }
+            public byte[] Buffer { get; set; }
         }
 
         private UdpClient m_Socket = null;
         private int m_Port = 0;
         private volatile int m_State = (int)ServerState.Shutdown;
         private Task<UdpReceiveResult> m_ActiveTask = null;
-        private PacketProcessor[] m_PacketProcessors = null;
         private List<INetConnection> m_Connections = new List<INetConnection>();
         private readonly object m_ConnectionLock = new object();
         private int m_MaxConnections = 100;
+        private PacketProcessor<ReceiveResult> m_Processor = null;
 
         public ServerState State
         {
             get { ServerState state = (ServerState)m_State; Thread.MemoryBarrier(); return state; }
             private set { m_State = (int)value; Thread.MemoryBarrier(); }
         }
-
-        private ConcurrentQueue<UdpReceiveResult> GetQueue(Protocol protocol)
-        {
-            return m_PacketProcessors[(int)protocol].m_Queue;
-        }
-
 
         public void Host(int port)
         {
@@ -47,27 +40,24 @@ namespace Game.Networking
                 throw new InvalidOperationException("NetServer cannot host as it is not in 'Shutdown' state");
             }
 
-            m_PacketProcessors = new PacketProcessor[NUM_PROTOCOLS];
-            m_PacketProcessors[(int)Protocol.FileTransfer] = new PacketProcessor() { m_Thread = new Thread(ProcessFileTransfers), m_Queue = new ConcurrentQueue<UdpReceiveResult>() };
-            m_PacketProcessors[(int)Protocol.RemoteMethod] = new PacketProcessor() { m_Thread = new Thread(ProcessRemoteMethods), m_Queue = new ConcurrentQueue<UdpReceiveResult>() };
-            m_PacketProcessors[(int)Protocol.Replication] = new PacketProcessor() { m_Thread = new Thread(ProcessReplications), m_Queue = new ConcurrentQueue<UdpReceiveResult>() };
-            m_PacketProcessors[(int)Protocol.WebRequest] = new PacketProcessor() { m_Thread = new Thread(ProcessWebRequests), m_Queue = new ConcurrentQueue<UdpReceiveResult>() };
-            m_PacketProcessors[(int)Protocol.Connect] = new PacketProcessor() { m_Thread = new Thread(ProcessConnections), m_Queue = new ConcurrentQueue<UdpReceiveResult>() };
-            m_PacketProcessors[(int)Protocol.Disconnect] = new PacketProcessor() { m_Thread = new Thread(ProcessDisconnect), m_Queue = new ConcurrentQueue<UdpReceiveResult>() };
+            m_Processor = new PacketProcessor<ReceiveResult>();
+            m_Processor.Start(new Action<ReceiveResult>[]
+            {
+                null, // None
+                null, // FileTransfer
+                null, // WebRequest
+                null, // RemoteMethod
+                null, // Replication
+                null, // Shutdown
+                CreateProtocolRoute<ConnectPacket>(ProcessConnectPacket, Protocol.Connect), // Connect
+                CreateProtocolRoute<DisconnectPacket>(ProcessDisconnectPacket, Protocol.Disconnect), // Disconnect
+                null  // Acknowledgement
+            });
 
             m_Port = port;
             m_Socket = new UdpClient(port);
             State = ServerState.Running;
             BeginReceive();
-            for (int i = 0; i < m_PacketProcessors.Length; ++i)
-            {
-                Thread thread = m_PacketProcessors[i].m_Thread;
-                if (thread != null)
-                {
-                    thread.Name = "Packet_Processor";
-                    thread.Start();
-                }
-            }
         }
 
         public void Close(ShutdownType shutdownType)
@@ -126,17 +116,11 @@ namespace Game.Networking
                     State = ServerState.ShuttingDown;
                     return;
                 }
-                else if(protocol != Protocol.None)
+                else if(protocol != Protocol.None && udpResult.RemoteEndPoint != null)
                 {
-                    var queue = GetQueue(protocol);
-                    if(queue != null)
+                    if(!m_Processor.Enqueue(protocol, new ReceiveResult() { Buffer = udpResult.Buffer, Sender = udpResult.RemoteEndPoint }))
                     {
-                        queue.Enqueue(udpResult);
-                    }
-                    else
-                    {
-                        string address = udpResult.RemoteEndPoint.ToString();
-                        Log.Debug($"Ignoring message from protocol {protocol} from {address}");
+                        Log.Debug($"Ignoring message from protocol {protocol} from {udpResult.RemoteEndPoint}");
                     }
                 }
             }
@@ -145,147 +129,78 @@ namespace Game.Networking
             BeginReceive();
         }
 
-        private void ProcessFileTransfers()
+        private Action<ReceiveResult> CreateProtocolRoute<PacketT>(Action<PacketT, IPEndPoint> callback, Protocol protocol) where PacketT : IProtocolPacket, new()
         {
-            Log.Debug("Start processing file transfer packets...");
-            while(State == ServerState.Running || State == ServerState.WaitingForSocket)
+            return (ReceiveResult result) =>
             {
-
-            }
-            Log.Debug("Stop processing file transfer packets...");
-        }
-
-        private void ProcessWebRequests()
-        {
-            Log.Debug("Start processing file transfer packets...");
-            while (State == ServerState.Running || State == ServerState.WaitingForSocket)
-            {
-
-            }
-            Log.Debug("Stop processing web request packets...");
-        }
-
-        private void ProcessRemoteMethods()
-        {
-            Log.Debug("Start processing remote method packets...");
-
-            ConcurrentQueue<UdpReceiveResult> queue = GetQueue(Protocol.RemoteMethod);
-            while(State == ServerState.Running || State == ServerState.WaitingForSocket)
-            {
-                UdpReceiveResult result;
-                if(queue.TryDequeue(out result))
+                PacketT packet = new PacketT();
+                if(packet.Read(result.Buffer))
                 {
-                    byte[] buffer = result.Buffer;
-
-                    RemoteMethodPacket packet = new RemoteMethodPacket();
-                    if(packet.Read(buffer))
-                    {
-                        // todo: Dispatch to replicator
-
-                        // todo: Handle network transport flags
-                    }
+                    callback(packet, result.Sender);
                 }
-            }
-            Log.Debug("Stop processing remote method packets...");
-        }
-
-        private void ProcessReplications()
-        {
-            Log.Debug("Start processing replication packets...");
-            while (State == ServerState.Running || State == ServerState.WaitingForSocket)
-            {
-
-            }
-            Log.Debug("Stop processing replication packets...");
-        }
-
-        private void ProcessConnections()
-        {
-            Log.Debug("Start processing connnect packets...");
-            ConcurrentQueue<UdpReceiveResult> queue = GetQueue(Protocol.Connect);
-            while (State == ServerState.Running || State == ServerState.WaitingForSocket)
-            {
-                UdpReceiveResult result;
-                if(queue.TryDequeue(out result))
+                else
                 {
-                    ConnectPacket packet = new ConnectPacket();
-                    if(packet.Read(result.Buffer))
-                    {
-                        Log.Debug($"Accepting connection {packet.Identifier}");
-                        INetConnection connection = CreateConnection(result.RemoteEndPoint, packet.Identifier);
-
-                        if((packet.Flags & ProtocolFlags.Reliable) > 0)
-                        {
-                            ConnectAckPacket connectAck = new ConnectAckPacket() { UID = connection.UID };
-                            NetStream ns = new NetStream();
-                            ns.Open();
-                            connectAck.NetSerialize(ns);
-                            byte[] connectAckData = ns.Close();
-
-                            AcknowledgePacket ack = new AcknowledgePacket()
-                            {
-                                ProtocolType = Protocol.Acknowledgement,
-                                Flags = ProtocolFlags.None,
-                                Crc32 = 0,
-                                UID = packet.UID,
-                                Data = connectAckData
-                            };
-                            byte[] bytes = ack.Write();
-                            int bytesSent = m_Socket.Send(bytes, bytes.Length, result.RemoteEndPoint);
-                            if(bytes.Length != bytesSent)
-                            {
-                                Log.Error($"Failed to send packet. Protocol={ack.ProtocolType}, Target={result.RemoteEndPoint.ToString()}, Expected={bytes.Length}, Sent={bytesSent}");
-                            }
-                        }
-                    }
-                    else
-                    {
-                        OnDiscardCorruptPacket(Protocol.Disconnect, result.Buffer, result.RemoteEndPoint);
-                    }
+                    OnDiscardCorruptPacket(protocol, result.Buffer, result.Sender);
                 }
-            }
-            Log.Debug("Stop processing connnect packets...");
+            };
         }
 
-        private void ProcessDisconnect()
+        private void SendPacket(byte[] data, IPEndPoint who, Protocol protocol)
         {
-            Log.Debug("Start processing disconnect packets...");
-            ConcurrentQueue<UdpReceiveResult> queue = GetQueue(Protocol.Disconnect);
-            while (State == ServerState.Running || State == ServerState.WaitingForSocket)
+            int bytesSent = m_Socket.Send(data, data.Length, who);
+            if (bytesSent != data.Length)
             {
-                UdpReceiveResult result;
-                if(queue.TryDequeue(out result))
-                {
-                    DisconnectPacket packet = new DisconnectPacket();
-                    if (packet.Read(result.Buffer))
-                    {
-                        INetConnection connection = CloseConnection(packet.ConnectionUID);
-                        if((packet.Flags & ProtocolFlags.Reliable) > 0)
-                        {
-                            AcknowledgePacket ack = new AcknowledgePacket()
-                            {
-                                ProtocolType = Protocol.Acknowledgement,
-                                Flags = ProtocolFlags.None,
-                                Crc32 = 0,
-                                UID = packet.UID,
-                                Data = new byte[0]
-                            };
-
-                            byte[] bytes = ack.Write();
-                            int bytesSent = m_Socket.Send(bytes, bytes.Length, result.RemoteEndPoint);
-                            if(bytes.Length != bytesSent)
-                            {
-                                Log.Error($"Failed to send packet. Protocol={ack.ProtocolType}");
-                            }
-                        }
-                    }
-                    else
-                    {
-                        OnDiscardCorruptPacket(Protocol.Disconnect, result.Buffer, result.RemoteEndPoint);
-                    }
-                }
+                Log.Error($"Failed to send packet. Protocol={protocol}, Target={who}, Expected={data.Length}, Sent={bytesSent}");
             }
-            Log.Debug("Stop processing disconnect packets...");
+        }
+
+        private void ProcessConnectPacket(ConnectPacket packet, IPEndPoint sender)
+        {
+            INetConnection connection = CreateConnection(sender, packet.Identifier);
+            // todo: Error Handling, what if we cannot create a connection?
+
+            if ((packet.Flags & ProtocolFlags.Reliable) > 0)
+            {
+                ConnectAckPacket connectAck = new ConnectAckPacket() { UID = connection.UID };
+                NetStream ns = new NetStream();
+                ns.Open();
+                connectAck.NetSerialize(ns);
+                byte[] connectAckData = ns.Close();
+
+                AcknowledgePacket ack = new AcknowledgePacket()
+                {
+                    ProtocolType = Protocol.Acknowledgement,
+                    Flags = ProtocolFlags.None,
+                    Crc32 = 0,
+                    UID = packet.UID,
+                    Data = connectAckData
+                };
+                byte[] bytes = ack.Write();
+                SendPacket(bytes, sender, ack.ProtocolType);
+            }
+        }
+
+        
+
+        private void ProcessDisconnectPacket(DisconnectPacket packet, IPEndPoint sender)
+        {
+            INetConnection connection = CloseConnection(packet.ConnectionUID);
+            // todo: Error Handling, what if we are closing an already closed connection?
+
+            if((packet.Flags & ProtocolFlags.Reliable) > 0)
+            {
+                AcknowledgePacket ack = new AcknowledgePacket()
+                {
+                    ProtocolType = Protocol.Acknowledgement,
+                    Flags = ProtocolFlags.None,
+                    Crc32 = 0,
+                    UID = packet.UID,
+                    Data = new byte[0]
+                };
+
+                byte[] bytes = ack.Write();
+                SendPacket(bytes, sender, ack.ProtocolType);
+            }
         }
 
         private INetConnection CreateConnection(IPEndPoint endPoint, string identifier)

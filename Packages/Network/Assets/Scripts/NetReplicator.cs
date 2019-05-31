@@ -106,7 +106,7 @@ namespace Game.Networking
             }
 
             // Read the header:
-            Protocol protocol = (Protocol)bytes[NetStream.HEADER_SIZE + 1];
+            Protocol protocol = (Protocol)bytes[NetStream.HEADER_SIZE];
             switch (protocol)
             {
                 case Protocol.RemoteMethod:

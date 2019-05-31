@@ -14,8 +14,8 @@ namespace Game.Networking
         private static readonly int NUM_PROTOCOLS = Enum.GetValues(typeof(Protocol)).Length;
         private struct VirtualReceiveResult
         {
-            public IVirtualNode Sender { get; set; }
-            public byte[] Buffer { get; set; }
+            public IVirtualNode Sender;
+            public byte[] Buffer;
         }
 
         private volatile int m_State = (int)ServerState.Shutdown;
@@ -131,7 +131,7 @@ namespace Game.Networking
                 }
                 else
                 {
-                    OnDiscardCorruptPacket(Protocol.Connect, result.Buffer, result.Sender);
+                    OnDiscardCorruptPacket(protocol, result.Buffer, result.Sender);
                 }
             };
         }
