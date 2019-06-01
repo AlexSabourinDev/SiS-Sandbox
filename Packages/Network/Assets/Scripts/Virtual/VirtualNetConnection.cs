@@ -8,6 +8,8 @@ namespace Game.Networking
         public string EndPointString { get; private set; } = string.Empty;
         public string Identifier { get; private set; } = string.Empty;
         public byte[] UID { get; private set; } = new byte[0];
+        public long TickMilliseconds { get { return 100000000000; } }
+        public void Tick() { }
 
         public VirtualNetConnection()
         {

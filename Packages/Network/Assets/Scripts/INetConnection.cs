@@ -8,5 +8,7 @@ namespace Game.Networking
         string EndPointString { get; }
         string Identifier { get; }
         byte[] UID { get; }
+        long TickMilliseconds { get; }
+        void Tick();
     }
 }

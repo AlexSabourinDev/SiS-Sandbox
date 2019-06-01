@@ -15,9 +15,8 @@ namespace Game.Networking
             public float LifeTime;
 
             public NetDriver Client;
-            [HideInInspector]
+            public bool Update;
             public bool Created;
-            [HideInInspector]
             public bool Closed;
         }
 
@@ -33,6 +32,9 @@ namespace Game.Networking
         [SerializeField]
         TemporaryClient[] m_TempClients = new TemporaryClient[0];
         private float m_Time = 0.0f;
+
+        public int Stat_ServerConnections = 0;
+        public float Stat_Time = 0.0f;
 
         private void Start()
         {
@@ -73,6 +75,11 @@ namespace Game.Networking
 
         private void Update()
         {
+            m_Server.Update();
+            m_Client.GetClient().SendHeartbeat();
+            Stat_ServerConnections = m_Server.GetServer().ConnectionCount;
+            Stat_Time = m_Time;
+
             float delta = Time.deltaTime;
             m_Time += delta;
             for(int i = 0; i < m_TempClients.Length; ++i)
@@ -92,6 +99,14 @@ namespace Game.Networking
                     {
                         m_TempClients[i].Closed = true;
                         m_TempClients[i].Client.Close(ShutdownType.Notify);
+                    }
+                    else if(m_TempClients[i].Update)
+                    {
+                        INetClient client = m_TempClients[i].Client.GetClient();
+                        if(client != null)
+                        {
+                            client.SendHeartbeat();
+                        }
                     }
                 }
             }

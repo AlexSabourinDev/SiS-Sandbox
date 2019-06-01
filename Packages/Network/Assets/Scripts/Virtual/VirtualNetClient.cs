@@ -272,5 +272,10 @@ namespace Game.Networking
                 State = ClientState.Connected;
             }
         }
+
+        public void SendHeartbeat()
+        {
+
+        }
     }
 }

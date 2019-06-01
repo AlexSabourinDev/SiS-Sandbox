@@ -16,5 +16,10 @@
         /// Returns the state of the client.
         /// </summary>
         ClientState State { get; }
+        /// <summary>
+        /// Sends a 'heartbeat' packet to the server to let them know we're still around
+        /// this way they won't timeout the connection.
+        /// </summary>
+        void SendHeartbeat();
     }
 }

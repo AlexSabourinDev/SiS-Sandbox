@@ -7,6 +7,9 @@ namespace Game.Networking
         private INetClient m_Client = null;
         private INetServer m_Server = null;
 
+        public INetClient GetClient() { return m_Client; }
+        public INetServer GetServer() { return m_Server; }
+
         public bool IsRunning
         {
             get
@@ -87,6 +90,14 @@ namespace Game.Networking
 
             // Send it!
             
+        }
+
+        public void Update()
+        {
+            if(m_Server != null)
+            {
+                m_Server.Update();
+            }
         }
     }
 }

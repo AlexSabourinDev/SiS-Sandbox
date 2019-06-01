@@ -27,6 +27,9 @@ namespace Game.Networking
         private int m_MaxConnections = 100;
         private PacketProcessor<ReceiveResult> m_Processor = null;
 
+        public int ConnectionCount { get { return m_Connections.Count; } }
+        public long TimeoutMilliseconds { get; set; } = 5000;
+
         public ServerState State
         {
             get { ServerState state = (ServerState)m_State; Thread.MemoryBarrier(); return state; }
@@ -43,7 +46,7 @@ namespace Game.Networking
             m_Processor = new PacketProcessor<ReceiveResult>();
             m_Processor.Start(new Action<ReceiveResult>[]
             {
-                null, // None
+                CreateNullProtocolRoute(), // None
                 null, // FileTransfer
                 null, // WebRequest
                 null, // RemoteMethod
@@ -142,6 +145,18 @@ namespace Game.Networking
         {
             return (ReceiveResult result) =>
             {
+                lock(m_ConnectionLock)
+                {
+                    for(int i = 0; i < m_Connections.Count; ++i)
+                    {
+                        if(m_Connections[i].EndPoint == result.Sender)
+                        {
+                            m_Connections[i].Tick();
+                            break;
+                        }
+                    }
+                }
+
                 PacketT packet = new PacketT();
                 if(packet.Read(result.Buffer))
                 {
@@ -151,6 +166,24 @@ namespace Game.Networking
                 else
                 {
                     OnDiscardCorruptPacket(protocol, result.Buffer, result.Sender);
+                }
+            };
+        }
+
+        private Action<ReceiveResult> CreateNullProtocolRoute()
+        {
+            return (ReceiveResult result) =>
+            {
+                lock (m_ConnectionLock)
+                {
+                    for (int i = 0; i < m_Connections.Count; ++i)
+                    {
+                        if (m_Connections[i].EndPoint.Equals(result.Sender))
+                        {
+                            m_Connections[i].Tick();
+                            break;
+                        }
+                    }
                 }
             };
         }
@@ -267,6 +300,24 @@ namespace Game.Networking
         private void OnDiscardCorruptPacket(Protocol protocol, byte[] bytes, IPEndPoint endPoint)
         {
             Log.Debug($"Discarding corrupt packet. Protocol={protocol}, Bytes={bytes.Length}, IP={endPoint.ToString()}");
+        }
+
+        public void Update()
+        {
+            lock(m_ConnectionLock)
+            {
+                for(int i = m_Connections.Count-1; i >= 0; --i)
+                {
+                    INetConnection connection = m_Connections[i];
+
+                    if(connection.TickMilliseconds > TimeoutMilliseconds)
+                    {
+
+                        Log.Debug($"Closing connection: ID={connection.Identifier}, UID={new Guid(connection.UID).ToString()}, IP={connection.EndPoint}");
+                        m_Connections.RemoveAt(i);
+                    }
+                }
+            }
         }
 
         // Process Data Flow:

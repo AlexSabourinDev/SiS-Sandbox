@@ -239,6 +239,15 @@ namespace Game.Networking
                 State = ClientState.Connected;
             }
         }
-        
+     
+        public void SendHeartbeat()
+        {
+            byte protocol = (byte)Protocol.None;
+            NetStream ns = new NetStream();
+            ns.Open();
+            ns.Serialize(ref protocol);
+            byte[] bytes = ns.Close();
+            SendPacket(0, bytes);
+        }
     }
 }

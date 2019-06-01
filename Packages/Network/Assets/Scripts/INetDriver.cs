@@ -32,6 +32,9 @@
         /// </summary>
         void Close(ShutdownType shutdownType);
 
+        INetClient GetClient();
+        INetServer GetServer();
+
 
         // void ReplicateObject(IReplicated replicatedObject);
         // void DestroyObject(IReplicated replicatedObject);
