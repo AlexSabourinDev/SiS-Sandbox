@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System.Text;
+using System.Diagnostics;
 using System.Collections.Concurrent;
 using System.Threading;
 using NUnit.Framework;
@@ -91,7 +92,7 @@ namespace Game.Networking
             MockVirtualNetClient client = new MockVirtualNetClient();
             client.VirtualConnect(network, server.VirtualAddress, "127.0.0.1:64332");
             TestUtil.Wait(() => { return client.State == ClientState.Connected; });
-            Assert.AreEqual(ClientState.Connecting, client.State);
+            Assert.AreEqual(ClientState.ConnectionFailed, client.State);
             Assert.AreEqual(1, client.CorruptAckPackets);
             Assert.AreEqual(0, client.BadProtocolPackets);
             Assert.IsTrue(server.HasConnection(client.VirtualAddress));
@@ -150,6 +151,47 @@ namespace Game.Networking
             Assert.AreEqual(0, client.CorruptAckPackets);
             Assert.AreEqual(0, client.BadProtocolPackets);
             Assert.IsFalse(server.HasConnection(client.VirtualAddress));
+
+            client.Close(ShutdownType.Notify);
+            TestUtil.Wait(() => { return client.State == ClientState.Shutdown; });
+            Assert.AreEqual(ClientState.Shutdown, client.State);
+
+            server.Close(ShutdownType.Immediate);
+            Assert.AreEqual(ServerState.Shutdown, server.State);
+        }
+
+        [Test]
+        public void ConnectFailThenSucceed()
+        {
+            VirtualNetwork network = new VirtualNetwork();
+            MockVirtualNetServer server = new MockVirtualNetServer();
+            server.m_ProcessConnectBehavior = MockVirtualNetServer.ProcessConnectBehavior.CorruptAck;
+
+            server.VirtualHost(network, "127.0.0.1:27000");
+            TestUtil.Wait(() => { return server.State == ServerState.Running; });
+            Assert.AreEqual(ServerState.Running, server.State);
+
+            MockVirtualNetClient client = new MockVirtualNetClient();
+            client.VirtualConnect(network, server.VirtualAddress, "127.0.0.1:64332");
+            TestUtil.Wait(() => { return client.State == ClientState.Connected; });
+            Assert.AreEqual(ClientState.ConnectionFailed, client.State);
+            Assert.AreEqual(1, client.CorruptAckPackets);
+            Assert.AreEqual(0, client.BadProtocolPackets);
+            Assert.IsTrue(server.HasConnection(client.VirtualAddress));
+            string corruptClient = server.GetConnectionUID(client.VirtualAddress);
+
+            client.Close(ShutdownType.Immediate);
+            TestUtil.Wait(() => { return client.State == ClientState.Shutdown; });
+            Assert.AreEqual(ClientState.Shutdown, client.State);
+
+            server.m_ProcessConnectBehavior = MockVirtualNetServer.ProcessConnectBehavior.Normal;
+            client.VirtualConnect(network, server.VirtualAddress, "127.0.0.1:64332");
+            TestUtil.Wait(() => { return client.State == ClientState.Connected; });
+            Assert.AreEqual(ClientState.Connected, client.State);
+            Assert.AreEqual(1, client.CorruptAckPackets);
+            Assert.AreEqual(0, client.BadProtocolPackets);
+            Assert.IsTrue(server.HasConnection(client.ConnectionUID));
+            Assert.AreNotEqual(Encoding.ASCII.GetString(client.ConnectionUID), corruptClient);
 
             client.Close(ShutdownType.Notify);
             TestUtil.Wait(() => { return client.State == ClientState.Shutdown; });

@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Threading;
-using System.Threading.Tasks;
 using Game.Util;
 
 namespace Game.Networking
@@ -35,11 +34,12 @@ namespace Game.Networking
         private VirtualNetwork m_Socket = null;
         private volatile int m_State = (int)ClientState.Shutdown;
         private string m_ConnectionIdentifier = string.Empty;
-        private byte[] m_ConnectionUID = null;
+        protected byte[] m_ConnectionUID = null;
         private uint m_UID = 0;
         private string m_Server = string.Empty;
         private ConcurrentDictionary<uint, ReliablePacket> m_ReliablePackets = new ConcurrentDictionary<uint, ReliablePacket>();
         protected Stats m_Stats = Stats.Default;
+        
 
 
         public ClientState State
@@ -48,6 +48,7 @@ namespace Game.Networking
             private set { m_State = (int)value; Thread.MemoryBarrier(); }
         }
         public string VirtualAddress { get; private set; }
+        public byte[] ConnectionUID { get { return m_ConnectionUID; } }
 
         public void VirtualConnect(VirtualNetwork network, string server, string address)
         {
@@ -138,7 +139,22 @@ namespace Game.Networking
 
         public void OnReceive(IVirtualNode sender, byte[] data)
         {
-            if(State == ClientState.ShuttingDown)
+            if (sender == null)
+            {
+                return;
+            }
+
+            if (State == ClientState.ShuttingDown)
+            {
+                return;
+            }
+            
+            if(sender.VirtualAddress != m_Server && sender.VirtualAddress != m_ConnectionIdentifier)
+            {
+                return;
+            }
+
+            if (State == ClientState.ConnectionFailed)
             {
                 return;
             }
@@ -161,6 +177,10 @@ namespace Game.Networking
                     else
                     {
                         Interlocked.Increment(ref m_Stats.CorruptAckPackets);
+                        if(State == ClientState.Connecting)
+                        {
+                            State = ClientState.ConnectionFailed;
+                        }
                     }
                 }
                 else

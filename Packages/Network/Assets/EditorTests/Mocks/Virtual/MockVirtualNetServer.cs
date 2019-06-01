@@ -1,4 +1,5 @@
-﻿using Game.Util;
+﻿using System.Text;
+using Game.Util;
 
 namespace Game.Networking
 {
@@ -75,6 +76,41 @@ namespace Game.Networking
             {
                 return connection.Identifier == identifier;
             });
+        }
+
+        public bool HasConnection(byte[] uid)
+        {
+            return m_Connections.Exists((INetConnection connection) =>
+            {
+                if(connection.UID.Length != uid.Length)
+                {
+                    return false;
+                }
+
+                bool allEqual = true;
+                for(int i = 0; i < uid.Length; ++i)
+                {
+                    if(uid[i] != connection.UID[i])
+                    {
+                        allEqual = false;
+                        break;
+                    }
+                }
+                return allEqual;
+            });
+        }
+
+        public string GetConnectionUID(string identifier)
+        {
+            var item = m_Connections.Find((INetConnection connection) =>
+            {
+                return connection.Identifier == identifier;
+            });
+            if(item == null)
+            {
+                return string.Empty;
+            }
+            return Encoding.ASCII.GetString(item.UID);
         }
     }
 }
