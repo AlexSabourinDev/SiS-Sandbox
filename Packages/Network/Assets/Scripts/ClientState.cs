@@ -6,7 +6,6 @@
         Connecting,
         Connected,
         ConnectionFailed,
-        Running,
         WaitingForSocket,
         ShuttingDown
     }

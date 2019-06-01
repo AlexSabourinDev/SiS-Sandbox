@@ -9,11 +9,18 @@ namespace Game.Networking
 {
     public class NetClient : INetClient
     {
+        private struct ReliablePacket
+        {
+            public uint UID;
+            public byte[] PacketData;
+            public Action<AcknowledgePacket, ReliablePacket> Callback;
+        }
+
         private UdpClient m_Socket = null;
         private volatile int m_State = (int)ClientState.Shutdown;
         private Task<UdpReceiveResult> m_ActiveTask = null;
         private uint m_UID = 0;
-        private ConcurrentDictionary<uint, byte[]> m_ReliablePackets = new ConcurrentDictionary<uint, byte[]>();
+        private ConcurrentDictionary<uint, ReliablePacket> m_ReliablePackets = new ConcurrentDictionary<uint, ReliablePacket>();
 
         private string m_ConnectionIdentifier = string.Empty;
         private byte[] m_ConnectionUID = null;
@@ -31,7 +38,7 @@ namespace Game.Networking
                 throw new InvalidOperationException("NetClient cannot host as it is not in 'Shutdown' state.");
             }
 
-            State = ClientState.Running;
+            State = ClientState.Connecting;
             m_Socket = new UdpClient(ipAddress, port);
             m_ConnectionIdentifier = identifier;
             BeginReceive();
@@ -47,12 +54,12 @@ namespace Game.Networking
             };
 
             byte[] bytes = packet.Write();
-            SendPacket(packet.UID, bytes);
+            SendPacket(packet.UID, bytes, OnConnectAcknowledged);
         }
 
         public void Close(ShutdownType shutdownType)
         {
-            if(shutdownType == ShutdownType.Notify)
+            if(shutdownType == ShutdownType.Notify && State == ClientState.Connected)
             {
                 DisconnectPacket packet = new DisconnectPacket()
                 {
@@ -67,13 +74,40 @@ namespace Game.Networking
                 SendPacket(packet.UID, bytes);
             }
 
-            State = ClientState.ShuttingDown;
-            m_Socket.Close();
+            if (shutdownType == ShutdownType.NotifyAndWait && State == ClientState.Connected)
+            {
+                State = ClientState.WaitingForSocket;
+                DisconnectPacket packet = new DisconnectPacket()
+                {
+                    ProtocolType = Protocol.Disconnect,
+                    Flags = ProtocolFlags.Reliable,
+                    Crc32 = 0,
+                    UID = m_UID++,
+                    ConnectionUID = m_ConnectionUID
+                };
+                byte[] bytes = packet.Write();
+                SendPacket(packet.UID, bytes,
+                    (AcknowledgePacket ackPacket, ReliablePacket reliablePacket) =>
+                    {
+                        State = ClientState.ShuttingDown;
+                    });
+
+                while (State != ClientState.ShuttingDown) { }
+                m_Socket.Close();
+                State = ClientState.Shutdown;
+            }
+            else
+            {
+                State = ClientState.WaitingForSocket;
+
+                m_Socket.Close();
+                State = ClientState.Shutdown;
+            }
         }
 
         private void BeginReceive()
         {
-            if(State == ClientState.Running)
+            if (State == ClientState.Connecting || State == ClientState.Connected || State == ClientState.WaitingForSocket)
             {
                 m_ActiveTask = m_Socket.ReceiveAsync();
                 m_ActiveTask.ContinueWith(OnReceive);
@@ -91,6 +125,11 @@ namespace Game.Networking
             // Wait(guid, timeout)
 
             UdpReceiveResult udpResult = result.Result;
+            if(udpResult.RemoteEndPoint == null)
+            {
+                return;
+            }
+
             if(udpResult.Buffer.Length > NetStream.HEADER_SIZE)
             {
                 Protocol protocol = (Protocol)udpResult.Buffer[NetStream.HEADER_SIZE];
@@ -99,67 +138,105 @@ namespace Game.Networking
                     State = ClientState.ShuttingDown;
                     return;
                 }
-                else if(protocol != Protocol.None)
+                else if(protocol == Protocol.Acknowledgement)
                 {
-                    if(protocol == Protocol.Acknowledgement)
+                    AcknowledgePacket packet = new AcknowledgePacket();
+                    if (packet.Read(udpResult.Buffer))
                     {
-                        AcknowledgePacket packet = new AcknowledgePacket();
-                        if(packet.Read(udpResult.Buffer))
-                        {
-                            CompletePacket(packet);
-                        }
+                        CompletePacket(packet);
                     }
+                    else
+                    {
+                        Log.Debug($"Ignoring corrupt packet with protocol {protocol} from {udpResult.RemoteEndPoint}");
+                    }
+                }
+                else
+                {
+                    Log.Debug($"Ignoring bad protocol packet {protocol} from {udpResult.RemoteEndPoint}");
                 }
             }
 
             BeginReceive();
         }
 
-        private void SendPacket(uint uid, byte[] data)
+        private void SendPacket(uint uid, byte[] data, Action<AcknowledgePacket, ReliablePacket> acknowledgementCallback = null)
         {
             ProtocolFlags flags = (ProtocolFlags)data[NetStream.HEADER_SIZE + 1];
 
             if((flags & ProtocolFlags.Reliable) > 0)
             {
-                if (!m_ReliablePackets.TryAdd(uid, data))
+                ReliablePacket packet = new ReliablePacket()
+                {
+                    UID = uid,
+                    PacketData = data,
+                    Callback = acknowledgementCallback
+                };
+                if (!m_ReliablePackets.TryAdd(uid, packet))
                 {
                     throw new InvalidOperationException("Failed to keep reliable packet, could not push item into dictionary");
                 }
             }
+            else if(acknowledgementCallback != null)
+            {
+                Log.Warning("Acknowledgement Callback argument was given but the packet is not reliable so it will never be called.");
+            }
 
-            int statusCode = m_Socket.Send(data, data.Length);
-            Log.Debug($"Send with StatusCode={statusCode}");
-            
+            int bytesSent = m_Socket.Send(data, data.Length);
+            if(bytesSent != data.Length)
+            {
+                Log.Warning($"Failed to send full packet data. Exepected Bytes={data.Length}, Sent Bytes={bytesSent}");
+            }
         }
 
         private void CompletePacket(AcknowledgePacket packet)
         {
-            byte[] data;
-            if(m_ReliablePackets.TryRemove(packet.UID, out data))
+            ReliablePacket reliablePacket;
+            if(m_ReliablePackets.TryRemove(packet.UID, out reliablePacket))
             {
-                Protocol protocol = (Protocol)data[NetStream.HEADER_SIZE];
-                ConnectAckPacket packetData = new ConnectAckPacket();
-                NetStream ns = new NetStream();
-                ns.Open(packet.Data);
-                packetData.NetSerialize(ns);
-                ns.Close();
-
-                m_ConnectionUID = packetData.UID;
-
-                bool allZero = true;
-                for(int i = 0; i < m_ConnectionUID.Length; ++i)
+                if(reliablePacket.Callback != null)
                 {
-                    if(m_ConnectionUID[i] != 0)
-                    {
-                        allZero = false;
-                        break;
-                    }
+                    Protocol protocol = (Protocol)reliablePacket.PacketData[NetStream.HEADER_SIZE];
+                    Log.Debug($"Processing ack for UID {packet.UID} for protocol {protocol}");
+                    reliablePacket.Callback(packet, reliablePacket);
                 }
+            }
+        }
 
-                if(allZero)
+        private void OnConnectAcknowledged(AcknowledgePacket packet, ReliablePacket reliablePacket)
+        {
+            Protocol protocol = (Protocol)reliablePacket.PacketData[NetStream.HEADER_SIZE];
+            if(protocol != Protocol.Connect)
+            {
+                Log.Error($"OnConnectAcknowledged cannot process protocol {protocol} from packet UID {reliablePacket.UID}");
+                return;
+            }
+
+            ConnectAckPacket packetData = new ConnectAckPacket();
+            NetStream ns = new NetStream();
+            ns.Open(packet.Data);
+            packetData.NetSerialize(ns);
+            ns.Close();
+
+            m_ConnectionUID = packetData.UID;
+
+            bool allZero = true;
+            for (int i = 0; i < m_ConnectionUID.Length; ++i)
+            {
+                if (m_ConnectionUID[i] != 0)
                 {
-                    Log.Debug($"Connection rejected!");
+                    allZero = false;
+                    break;
                 }
+            }
+
+            if (allZero)
+            {
+                Log.Debug($"Connection rejected!");
+                State = ClientState.ConnectionFailed;
+            }
+            else
+            {
+                State = ClientState.Connected;
             }
         }
         

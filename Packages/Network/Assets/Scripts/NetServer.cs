@@ -84,8 +84,13 @@ namespace Game.Networking
             {
 
             }
-
+            m_Processor.Stop();
+            m_Processor = null;
             m_Socket.Close();
+            m_Connections.Clear();
+            m_Socket = null;
+            m_Port = 0;
+            m_ActiveTask = null;
             // todo: Send/wait depending on ShutdownType
         }
 
@@ -107,16 +112,20 @@ namespace Game.Networking
 
             // Queue data for processing:
             UdpReceiveResult udpResult = result.Result;
+            if(udpResult.RemoteEndPoint == null)
+            {
+                return;
+            }
+
             if(udpResult.Buffer.Length > NetStream.HEADER_SIZE)
             {
                 Protocol protocol = (Protocol)udpResult.Buffer[NetStream.HEADER_SIZE];
-                if(protocol == Protocol.Shutdown && State == ServerState.WaitingForSocket)
+                if (protocol == Protocol.Shutdown && State == ServerState.WaitingForSocket)
                 {
-                    Log.Debug("Shutdown message received!");
                     State = ServerState.ShuttingDown;
                     return;
                 }
-                else if(protocol != Protocol.None && udpResult.RemoteEndPoint != null)
+                else
                 {
                     if(!m_Processor.Enqueue(protocol, new ReceiveResult() { Buffer = udpResult.Buffer, Sender = udpResult.RemoteEndPoint }))
                     {
@@ -136,6 +145,7 @@ namespace Game.Networking
                 PacketT packet = new PacketT();
                 if(packet.Read(result.Buffer))
                 {
+                    Log.Debug($"Processing packet of length {result.Buffer.Length} with protocol {protocol} from {result.Sender.ToString()}");
                     callback(packet, result.Sender);
                 }
                 else

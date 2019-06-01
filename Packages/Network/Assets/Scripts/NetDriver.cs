@@ -12,7 +12,7 @@ namespace Game.Networking
             get
             {
                 return m_Client != null ? 
-                    m_Client.State == ClientState.Running :
+                    (m_Client.State == ClientState.Connected || m_Client.State == ClientState.Connecting) :
                     m_Server != null && m_Server.State == ServerState.Running;
             }
         }

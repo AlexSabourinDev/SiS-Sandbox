@@ -5,7 +5,7 @@ using Game.Util;
 
 namespace Game.Networking
 {
-    public class VirtualNetClient : IVirtualNode
+    public class VirtualNetClient : IVirtualNode, INetClient
     {
         private struct ReliablePacket
         {
@@ -49,6 +49,11 @@ namespace Game.Networking
         }
         public string VirtualAddress { get; private set; }
         public byte[] ConnectionUID { get { return m_ConnectionUID; } }
+
+        public void Connect(string identifier, string ipAddress, int port)
+        {
+            throw new InvalidOperationException("VirtualNetClient cannot Connect using the method 'Connect' use 'VirtualConnect' instead.");
+        }
 
         public void VirtualConnect(VirtualNetwork network, string server, string address)
         {
@@ -260,7 +265,7 @@ namespace Game.Networking
             if (allZero)
             {
                 Log.Debug($"Connection rejected!");
-                State = ClientState.Shutdown;
+                State = ClientState.ConnectionFailed;
             }
             else
             {
