@@ -17,6 +17,21 @@ namespace Game.Networking
             public IVirtualNode Sender;
             public byte[] Buffer;
         }
+        protected struct Stats
+        {
+            public int BadProtocolPackets;
+
+            public static Stats Default
+            {
+                get
+                {
+                    return new Stats()
+                    {
+                        BadProtocolPackets = 0
+                    };
+                }
+            }
+        }
 
         private volatile int m_State = (int)ServerState.Shutdown;
         private VirtualNetwork m_Socket = null;
@@ -25,6 +40,8 @@ namespace Game.Networking
         private int m_MaxConnections = 100;
         private PacketProcessor<VirtualReceiveResult> m_PacketProcessor = new PacketProcessor<VirtualReceiveResult>();
 
+        // Stats:
+        protected Stats m_Stats = Stats.Default;
 
         public ServerState State
         {
@@ -93,10 +110,16 @@ namespace Game.Networking
             m_Socket.Disconnect(this);
             VirtualAddress = string.Empty;
             m_Socket = null;
+            State = ServerState.Shutdown;
         }
 
         public void OnReceive(IVirtualNode sender, byte[] data)
         {
+            if(sender == null)
+            {
+                return;
+            }
+
             if(State == ServerState.ShuttingDown)
             {
                 return;
@@ -110,11 +133,12 @@ namespace Game.Networking
                     State = ServerState.ShuttingDown;
                     return;
                 }
-                else if(protocol != Protocol.None && sender != null)
+                else
                 {
-                    if(!m_PacketProcessor.Enqueue(protocol, new VirtualReceiveResult() { Sender = sender, Buffer = data}))
+                    if(!m_PacketProcessor.Enqueue(protocol, new VirtualReceiveResult() { Sender = sender, Buffer = data }))
                     {
                         Log.Debug($"Ignoring message from protocol {protocol} from {sender.VirtualAddress}");
+                        Interlocked.Increment(ref m_Stats.BadProtocolPackets);
                     }
                 }
             }
@@ -136,7 +160,7 @@ namespace Game.Networking
             };
         }
 
-        private INetConnection CreateConnection(IVirtualNode endPoint, string identifier)
+        protected INetConnection CreateConnection(IVirtualNode endPoint, string identifier)
         {
             lock (m_ConnectionLock)
             {
@@ -153,7 +177,7 @@ namespace Game.Networking
             }
         }
 
-        private INetConnection CloseConnection(byte[] uid)
+        protected INetConnection CloseConnection(byte[] uid)
         {
             INetConnection connection = null;
             lock (m_ConnectionLock)
@@ -192,7 +216,7 @@ namespace Game.Networking
             Log.Debug($"Discarding corrupt packet. Protocol={protocol}, Bytes={bytes.Length}, IP={endPoint.VirtualAddress}");
         }
 
-        private void ProcessConnectPacket(ConnectPacket packet, IVirtualNode sender)
+        protected virtual void ProcessConnectPacket(ConnectPacket packet, IVirtualNode sender)
         {
             INetConnection connection = CreateConnection(sender, packet.Identifier);
             if((packet.Flags & ProtocolFlags.Reliable) > 0)

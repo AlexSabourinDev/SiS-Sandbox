@@ -38,7 +38,7 @@ namespace Game.Networking
                 throw new InvalidOperationException("VirtualNetClient cannot host as it is not in 'Shutdown' state.");
             }
 
-            State = ClientState.Running;
+            State = ClientState.Connecting;
 
             m_ConnectionIdentifier = address;
             m_Server = server;
@@ -100,8 +100,21 @@ namespace Game.Networking
             }
             else
             {
-                State = ClientState.ShuttingDown;
+                State = ClientState.WaitingForSocket;
+                
+                // Create shutdown message
+                NetStream ns = new NetStream();
+                byte msg = (byte)Protocol.Shutdown;
+                ns.Open();
+                ns.Serialize(ref msg);
+                byte[] msgBytes = ns.Close();
+
+                // Emulate unblocking a socket by sending the Shutdown message to ourself
+                m_Socket.Send(VirtualAddress, this, msgBytes);
+                while (State != ClientState.ShuttingDown) { }
+
                 m_Socket.Disconnect(this);
+                State = ClientState.Shutdown;
             }
         }
 
@@ -204,6 +217,11 @@ namespace Game.Networking
             if (allZero)
             {
                 Log.Debug($"Connection rejected!");
+                State = ClientState.Shutdown;
+            }
+            else
+            {
+                State = ClientState.Connected;
             }
         }
     }

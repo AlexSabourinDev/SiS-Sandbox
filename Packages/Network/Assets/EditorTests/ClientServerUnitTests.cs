@@ -1,7 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Collections.Concurrent;
 using System.Threading;
-using UnityEngine;
 using NUnit.Framework;
 using Game.Util;
 
@@ -9,59 +8,10 @@ namespace Game.Networking
 {
     public class ClientServerUnitTests
     {
-        public class Dispatcher : IAsyncLogHandler
-        {
-            public struct Message
-            {
-                public LogLevel LogLevel;
-                public string LogMessage;
-            }
-
-            private ConcurrentQueue<Message> Items = new ConcurrentQueue<Message>();
-
-            public Dispatcher()
-            {
-                LogConfig.LoggingLevel = LogLevel.Debug;
-                Log.LogHandler = this;
-            }
-
-            public void Output(LogLevel logLevel, string formattedMessage)
-            {
-                Items.Enqueue(new Message() { LogLevel = logLevel, LogMessage = formattedMessage });
-            }
-
-            public void Update()
-            {
-                Message msg;
-                if(Items.TryDequeue(out msg))
-                {
-                    switch(msg.LogLevel)
-                    {
-                        case LogLevel.Debug:
-                        case LogLevel.Info:
-                            {
-                                UnityEngine.Debug.Log(msg.LogMessage);
-                                break;
-                            }
-                        case LogLevel.Warning:
-                            {
-                                UnityEngine.Debug.LogWarning(msg.LogMessage);
-                                break;
-                            }
-                        case LogLevel.Error:
-                            {
-                                UnityEngine.Debug.LogError(msg.LogMessage);
-                                break;
-                            }
-                    }
-                }
-            }
-        }
-
         [Test]
         public void BasicTest()
         {
-            Dispatcher dispatcher = new Dispatcher();
+            TestLogDispatcher dispatcher = new TestLogDispatcher();
 
             VirtualNetwork network = new VirtualNetwork();
 
@@ -96,8 +46,33 @@ namespace Game.Networking
             watch = new Stopwatch();
 
             Log.LogHandler = null;
+            // Mock:
+            // 
         }
 
+        [Test]
+        public void ConnectTest()
+        {
+            // TestLogDispatcher dispatcher = new TestLogDispatcher();
+
+            VirtualNetwork network = new VirtualNetwork();
+            MockVirtualNetServer server = new MockVirtualNetServer();
+            server.VirtualHost(network, "127.0.0.1:27000");
+            TestUtil.Wait(() => { return server.State == ServerState.Running; });
+            Assert.AreEqual(ServerState.Running, server.State);
+
+            VirtualNetClient client = new VirtualNetClient();
+            client.VirtualConnect(network, server.VirtualAddress, "127.0.0.1:64332");
+            TestUtil.Wait(() => { return client.State == ClientState.Connected; });
+            Assert.AreEqual(ClientState.Connected, client.State);
+
+            client.Close(ShutdownType.Notify);
+            TestUtil.Wait(() => { return client.State == ClientState.Shutdown; });
+            Assert.AreEqual(ClientState.Shutdown, client.State);
+
+            server.Close(ShutdownType.Immediate);
+            Assert.AreEqual(ServerState.Shutdown, server.State);
+        }
         
     }
 }
