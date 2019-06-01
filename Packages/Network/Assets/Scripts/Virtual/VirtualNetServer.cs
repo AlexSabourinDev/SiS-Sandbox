@@ -34,7 +34,7 @@ namespace Game.Networking
         }
 
         private volatile int m_State = (int)ServerState.Shutdown;
-        private VirtualNetwork m_Socket = null;
+        protected VirtualNetwork m_Socket = null;
         private List<INetConnection> m_Connections = new List<INetConnection>();
         private readonly object m_ConnectionLock = new object();
         private int m_MaxConnections = 100;
@@ -245,7 +245,10 @@ namespace Game.Networking
 
         private void ProcessDisconnectPacket(DisconnectPacket packet, IVirtualNode sender)
         {
-            INetConnection connection = CloseConnection(packet.ConnectionUID);
+            if(packet.ConnectionUID.Length == 16)
+            {
+                CloseConnection(packet.ConnectionUID);
+            }
             if((packet.Flags & ProtocolFlags.Reliable) > 0)
             {
                 AcknowledgePacket ack = new AcknowledgePacket()

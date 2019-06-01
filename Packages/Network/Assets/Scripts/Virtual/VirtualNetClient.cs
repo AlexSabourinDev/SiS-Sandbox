@@ -14,6 +14,23 @@ namespace Game.Networking
             public byte[] PacketData;
             public Action<AcknowledgePacket, ReliablePacket> Callback;
         }
+        protected struct Stats
+        {
+            public int BadProtocolPackets;
+            public int CorruptAckPackets;
+
+            public static Stats Default
+            {
+                get
+                {
+                    return new Stats()
+                    {
+                        BadProtocolPackets = 0,
+                        CorruptAckPackets = 0
+                    };
+                }
+            }
+        }
 
         private VirtualNetwork m_Socket = null;
         private volatile int m_State = (int)ClientState.Shutdown;
@@ -22,6 +39,7 @@ namespace Game.Networking
         private uint m_UID = 0;
         private string m_Server = string.Empty;
         private ConcurrentDictionary<uint, ReliablePacket> m_ReliablePackets = new ConcurrentDictionary<uint, ReliablePacket>();
+        protected Stats m_Stats = Stats.Default;
 
 
         public ClientState State
@@ -62,7 +80,7 @@ namespace Game.Networking
 
         public void Close(ShutdownType shutdownType)
         {
-            if(shutdownType == ShutdownType.Notify)
+            if(shutdownType == ShutdownType.Notify && State == ClientState.Connected)
             {
                 DisconnectPacket packet = new DisconnectPacket()
                 {
@@ -77,7 +95,7 @@ namespace Game.Networking
                 SendPacket(packet.UID, bytes);
             }
 
-            if(shutdownType == ShutdownType.NotifyAndWait)
+            if(shutdownType == ShutdownType.NotifyAndWait && State == ClientState.Connected)
             {
                 State = ClientState.WaitingForSocket;
                 DisconnectPacket packet = new DisconnectPacket()
@@ -133,16 +151,21 @@ namespace Game.Networking
                     State = ClientState.ShuttingDown;
                     return;
                 }
-                else if (protocol != Protocol.None)
+                else if(protocol == Protocol.Acknowledgement)
                 {
-                    if (protocol == Protocol.Acknowledgement)
+                    AcknowledgePacket packet = new AcknowledgePacket();
+                    if (packet.Read(data))
                     {
-                        AcknowledgePacket packet = new AcknowledgePacket();
-                        if (packet.Read(data))
-                        {
-                            CompletePacket(packet);
-                        }
+                        CompletePacket(packet);
                     }
+                    else
+                    {
+                        Interlocked.Increment(ref m_Stats.CorruptAckPackets);
+                    }
+                }
+                else
+                {
+                    Interlocked.Increment(ref m_Stats.BadProtocolPackets);
                 }
             }
         }

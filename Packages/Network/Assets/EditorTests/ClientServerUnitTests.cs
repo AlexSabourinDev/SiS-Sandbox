@@ -61,7 +61,7 @@ namespace Game.Networking
             TestUtil.Wait(() => { return server.State == ServerState.Running; });
             Assert.AreEqual(ServerState.Running, server.State);
 
-            VirtualNetClient client = new VirtualNetClient();
+            MockVirtualNetClient client = new MockVirtualNetClient();
             client.VirtualConnect(network, server.VirtualAddress, "127.0.0.1:64332");
             TestUtil.Wait(() => { return client.State == ClientState.Connected; });
             Assert.AreEqual(ClientState.Connected, client.State);
@@ -73,6 +73,30 @@ namespace Game.Networking
             server.Close(ShutdownType.Immediate);
             Assert.AreEqual(ServerState.Shutdown, server.State);
         }
-        
+
+        [Test]
+        public void ConnectAckCorruptPacket()
+        {
+            VirtualNetwork network = new VirtualNetwork();
+            MockVirtualNetServer server = new MockVirtualNetServer();
+            server.m_ProcessConnectBehavior = MockVirtualNetServer.ProcessConnectBehavior.CorruptAck;
+
+            server.VirtualHost(network, "127.0.0.1:27000");
+            TestUtil.Wait(() => { return server.State == ServerState.Running; });
+            Assert.AreEqual(ServerState.Running, server.State);
+
+            MockVirtualNetClient client = new MockVirtualNetClient();
+            client.VirtualConnect(network, server.VirtualAddress, "127.0.0.1:64332");
+            TestUtil.Wait(() => { return client.State == ClientState.Connected; });
+            Assert.AreEqual(ClientState.Connecting, client.State);
+            Assert.AreEqual(1, client.CorruptAckPackets);
+
+            client.Close(ShutdownType.Notify);
+            TestUtil.Wait(() => { return client.State == ClientState.Shutdown; });
+            Assert.AreEqual(ClientState.Shutdown, client.State);
+
+            server.Close(ShutdownType.Immediate);
+            Assert.AreEqual(ServerState.Shutdown, server.State);
+        }
     }
 }
