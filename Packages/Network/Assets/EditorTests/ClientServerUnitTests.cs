@@ -65,6 +65,9 @@ namespace Game.Networking
             client.VirtualConnect(network, server.VirtualAddress, "127.0.0.1:64332");
             TestUtil.Wait(() => { return client.State == ClientState.Connected; });
             Assert.AreEqual(ClientState.Connected, client.State);
+            Assert.AreEqual(0, client.CorruptAckPackets);
+            Assert.AreEqual(0, client.BadProtocolPackets);
+            Assert.IsTrue(server.HasConnection(client.VirtualAddress));
 
             client.Close(ShutdownType.Notify);
             TestUtil.Wait(() => { return client.State == ClientState.Shutdown; });
@@ -90,6 +93,63 @@ namespace Game.Networking
             TestUtil.Wait(() => { return client.State == ClientState.Connected; });
             Assert.AreEqual(ClientState.Connecting, client.State);
             Assert.AreEqual(1, client.CorruptAckPackets);
+            Assert.AreEqual(0, client.BadProtocolPackets);
+            Assert.IsTrue(server.HasConnection(client.VirtualAddress));
+
+            client.Close(ShutdownType.Notify);
+            TestUtil.Wait(() => { return client.State == ClientState.Shutdown; });
+            Assert.AreEqual(ClientState.Shutdown, client.State);
+
+            server.Close(ShutdownType.Immediate);
+            Assert.AreEqual(ServerState.Shutdown, server.State);
+        }
+
+        [Test]
+        public void ConnectAckIgnore()
+        {
+            VirtualNetwork network = new VirtualNetwork();
+            MockVirtualNetServer server = new MockVirtualNetServer();
+            server.m_ProcessConnectBehavior = MockVirtualNetServer.ProcessConnectBehavior.IgnoreAck;
+
+            server.VirtualHost(network, "127.0.0.1:27000");
+            TestUtil.Wait(() => { return server.State == ServerState.Running; });
+            Assert.AreEqual(ServerState.Running, server.State);
+
+            MockVirtualNetClient client = new MockVirtualNetClient();
+            client.VirtualConnect(network, server.VirtualAddress, "127.0.0.1:64332");
+            TestUtil.Wait(() => { return client.State == ClientState.Connected; });
+            Assert.AreEqual(ClientState.Connecting, client.State);
+            Assert.AreEqual(0, client.CorruptAckPackets);
+            Assert.AreEqual(0, client.BadProtocolPackets);
+            Assert.IsTrue(server.HasConnection(client.VirtualAddress));
+
+            client.Close(ShutdownType.Notify);
+            TestUtil.Wait(() => { return client.State == ClientState.Shutdown; });
+            Assert.AreEqual(ClientState.Shutdown, client.State);
+
+            server.Close(ShutdownType.Immediate);
+            Assert.AreEqual(ServerState.Shutdown, server.State);
+        }
+
+        [Test]
+        public void ConnectIgnore()
+        {
+            // In the future we can use the VirtualNetwork to setup a topology and simulate a packet being dropped.
+            VirtualNetwork network = new VirtualNetwork();
+            MockVirtualNetServer server = new MockVirtualNetServer();
+            server.m_ProcessConnectBehavior = MockVirtualNetServer.ProcessConnectBehavior.Ignore;
+
+            server.VirtualHost(network, "127.0.0.1:27000");
+            TestUtil.Wait(() => { return server.State == ServerState.Running; });
+            Assert.AreEqual(ServerState.Running, server.State);
+
+            MockVirtualNetClient client = new MockVirtualNetClient();
+            client.VirtualConnect(network, server.VirtualAddress, "127.0.0.1:64332");
+            TestUtil.Wait(() => { return client.State == ClientState.Connected; });
+            Assert.AreEqual(ClientState.Connecting, client.State);
+            Assert.AreEqual(0, client.CorruptAckPackets);
+            Assert.AreEqual(0, client.BadProtocolPackets);
+            Assert.IsFalse(server.HasConnection(client.VirtualAddress));
 
             client.Close(ShutdownType.Notify);
             TestUtil.Wait(() => { return client.State == ClientState.Shutdown; });

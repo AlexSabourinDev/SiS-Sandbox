@@ -67,5 +67,14 @@ namespace Game.Networking
                     } break;
             }
         }
+
+
+        public bool HasConnection(string identifier)
+        {
+            return m_Connections.Exists((INetConnection connection) =>
+            {
+                return connection.Identifier == identifier;
+            });
+        }
     }
 }

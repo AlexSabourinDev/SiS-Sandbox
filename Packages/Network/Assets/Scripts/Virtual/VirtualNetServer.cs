@@ -35,7 +35,7 @@ namespace Game.Networking
 
         private volatile int m_State = (int)ServerState.Shutdown;
         protected VirtualNetwork m_Socket = null;
-        private List<INetConnection> m_Connections = new List<INetConnection>();
+        protected List<INetConnection> m_Connections = new List<INetConnection>();
         private readonly object m_ConnectionLock = new object();
         private int m_MaxConnections = 100;
         private PacketProcessor<VirtualReceiveResult> m_PacketProcessor = new PacketProcessor<VirtualReceiveResult>();
