@@ -40,7 +40,8 @@ namespace Game
                 return;
             }
 
-            string resourceName = property.stringValue;
+
+            string resourceName = AssetDatabase.GUIDToAssetPath(property.stringValue);
             GameObject prefab = AssetDatabase.LoadAssetAtPath(resourceName, typeof(GameObject)) as GameObject;
             if (prefab)
             {
@@ -76,7 +77,7 @@ namespace Game
                     }
                     else
                     {
-                        property.stringValue = resourceName;
+                        property.stringValue = AssetDatabase.AssetPathToGUID(resourceName);
                     }
                 }
             }
