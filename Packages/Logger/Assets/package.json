@@ -1,7 +1,7 @@
 {
-    "name": "com.game.logger",
-    "displayName": "Game Logger",
-    "version": "1.0.0",
-    "unity": "2019.1",
-    "description": "A thread-safe logging library"
+  "name": "com.game.logger",
+  "displayName": "Game Logger",
+  "version": "1.0.1",
+  "unity": "2019.1",
+  "description": "A thread-safe logging library"
 }

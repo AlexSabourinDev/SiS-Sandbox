@@ -6,10 +6,15 @@ using Unity.Scenes;
 public class Streaming_Test : MonoBehaviour
 {
     [SerializeField]
-    private SubScene m_TestScene;
+    private SubScene m_TestScene = null;
 
     private void Update()
     {
+        if(m_TestScene == null)
+        {
+            return;
+        }
+
         if(Input.GetKeyDown(KeyCode.L))
         {
             EntityManager entityManager = World.Active.EntityManager;

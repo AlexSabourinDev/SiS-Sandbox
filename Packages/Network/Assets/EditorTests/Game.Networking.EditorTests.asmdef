@@ -1,7 +1,8 @@
 {
     "name": "Game.Networking.EditorTests",
     "references": [
-        "GUID:fc9c51a1640b4104f9702a73b7ad2619"
+        "GUID:fc9c51a1640b4104f9702a73b7ad2619",
+        "GUID:4d2719f7e5f7ffc45b83f1811645f0d0"
     ],
     "optionalUnityReferences": [
         "TestAssemblies"
