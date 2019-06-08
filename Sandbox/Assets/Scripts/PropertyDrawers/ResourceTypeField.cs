@@ -24,12 +24,12 @@ namespace Game
     /// 
     /// </summary>
     [AttributeUsage(AttributeTargets.Field)]
-    public class ResourceTypeAttribute : PropertyAttribute
+    public class ResourceTypeFieldAttribute : PropertyAttribute
     {
     }
 
 #if UNITY_EDITOR
-    [CustomPropertyDrawer(typeof(ResourceTypeAttribute))]
+    [CustomPropertyDrawer(typeof(ResourceTypeFieldAttribute))]
     public class ResourceTypeDrawer : PropertyDrawer
     {
         public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
