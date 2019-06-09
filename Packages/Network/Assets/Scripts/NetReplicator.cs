@@ -10,11 +10,11 @@ namespace Game.Networking
         public struct ReplicatedObject
         {
             public IReplicated Handle { get; set; }
-            public uint ID { get; set; }
+            public int ID { get; set; }
             public ReplicationType Type { get; set; }
         }
 
-        protected const uint NULL_OBJECT_ID = 0xFFFFFFFF;
+        protected const int NULL_OBJECT_ID = -1;
         protected const uint MAX_OBJECT_COUNT = 1000000;
         protected readonly ReplicatedObject NULL_OBJECT = new ReplicatedObject() { Handle = null, ID = NULL_OBJECT_ID, Type = null };
 
@@ -24,8 +24,8 @@ namespace Game.Networking
         // fast object search by ID + unique ID generation
         protected List<ReplicatedObject> m_Objects = new List<ReplicatedObject>();
         protected List<ReplicationType> m_Types = new List<ReplicationType>();
-        protected List<uint> m_FreeIDs = new List<uint>();
-        protected uint m_CurrentID = 0;
+        protected List<int> m_FreeIDs = new List<int>();
+        protected int m_CurrentID = 0;
 
         // protected uint m_TerribleIDGenerator = 1;
         // 
@@ -149,7 +149,7 @@ namespace Game.Networking
                 throw new ArgumentException("Invalid argument 'obj' in order for an object to be replicated it must implement the IReplicated interface.");
             }
 
-            uint id = 0;
+            int id = 0;
             if(m_FreeIDs.Count > 0)
             {
                 id = m_FreeIDs[m_FreeIDs.Count - 1];
@@ -165,18 +165,17 @@ namespace Game.Networking
             {
                 m_Objects.Add(NULL_OBJECT);
             }
-            int index = (int)id;
 
             // todo: This shouldn't really happen, if it does we could possibly recover by reallocating an ID until it's
             // or just crash.
-            if (!NetUtil.IsNull(m_Objects[index].Handle))
+            if (!NetUtil.IsNull(m_Objects[id].Handle))
             {
                 Log.Error($"NetReplicator ID generator has generated an ID that is already in use.");
             }
 
             obj.NetworkID = id;
             obj.NetworkType = replicationType;
-            m_Objects[index] = new ReplicatedObject() { ID = id, Handle = obj, Type = replicationType };
+            m_Objects[id] = new ReplicatedObject() { ID = id, Handle = obj, Type = replicationType };
         }
 
         public void Free(IReplicated obj)
@@ -186,7 +185,7 @@ namespace Game.Networking
                 throw new ArgumentNullException("Argument 'obj' is null.");
             }
 
-            uint id = obj.NetworkID;
+            int id = obj.NetworkID;
             obj.NetworkID = 0;
 
             int index = (int)id;

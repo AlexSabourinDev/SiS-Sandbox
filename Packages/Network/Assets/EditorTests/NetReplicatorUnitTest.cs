@@ -106,7 +106,7 @@ namespace Game.Networking
 
         public class StubReplicatedA : IReplicated
         {
-            public uint NetworkID { get; set; }
+            public int NetworkID { get; set; }
             public ReplicationType NetworkType { get; set; }
 
             public uint MethodACalled = 0;
@@ -137,7 +137,7 @@ namespace Game.Networking
 
         public class StubReplicatedB : IReplicated
         {
-            public uint NetworkID { get; set; }
+            public int NetworkID { get; set; }
             public ReplicationType NetworkType { get; set; }
 
             public uint MethodACalled = 0;
@@ -165,7 +165,7 @@ namespace Game.Networking
             }
         }
 
-        private static byte[] CreatePacketBytes<T>(uint objectID, uint methodID, T arg) where T : IReplicatedArgument
+        private static byte[] CreatePacketBytes<T>(int objectID, uint methodID, T arg) where T : IReplicatedArgument
         {
             NetStream ns = new NetStream();
             ns.Open();

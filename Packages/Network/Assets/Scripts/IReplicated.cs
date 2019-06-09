@@ -9,7 +9,7 @@
     /// </summary>
     public interface IReplicated
     {
-        uint NetworkID { get; set; }
+        int NetworkID { get; set; }
         ReplicationType NetworkType { get; set; }
     }
 }

@@ -20,7 +20,7 @@ namespace Game.Networking
         /// <summary>
         /// The target object to invoke the method on
         /// </summary>
-        public uint ObjectID;
+        public int ObjectID;
         /// <summary>
         /// The target method to invoke
         /// </summary>
