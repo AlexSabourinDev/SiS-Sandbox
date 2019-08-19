@@ -8,39 +8,22 @@ Siiiiii - Sandbox is a studio-wide Unity project that is intended to be used as 
 - Share. Share your brain smarts with others, this project is an attempt to increase collaboration and overall studio knowledge.
 
 ## Proposed Features
-### Networking
-- How to improve usability?
-- Do we want to check out the new Unity multiplayer package?
-- Potential Resources:
-- [Gaffer On Games](https://gafferongames.com/)
+- Networking
+- Dialogue
+- 2D Character
+- Rendering
+- Tools
+
+## Team (Add your name here!)
 - Nathan Hanlan
+- Alex S
+- Jared M
+- Thomas H
 
-### Rendering
-- Materials and Lighting. Can we take a look at PBR?
-- Potential resource:
-- [Filament PBR](https://google.github.io/filament/Filament.md.html)
-- [Aura](https://assetstore.unity.com/packages/tools/particles-effects/aura-volumetric-lighting-111664)
-- Alex Sabouringtorulethemall
-- Thomas Hill
-
-### Tools
-- Don't know yet.
-- Jared MoocDoonoold
-
-### 3D Character control
-- What dis?
-
-### Object collection
-- What dis?
-
-## Features
-- Travis Martin
-
-### SubScene Streaming
-- An incomplete streaming feature is included into the project. It works simply by referencing streaming "cells" that are defined by subscenes. Loading and unloading these subscenes is already supported by Unity's subscene workflow, as a result, the system is simply a driver that determines which subscenes are to be loaded and unloaded.
-- It is in an incomplete state because it requires using their ECS infrastructure which makes it difficult to interop with the rest of Unity's infrastructure. Maybe in the future when ECS is more fully fledged. Maybe something else could be introduced in the future instead. For now, this feature is being shelved as is.
-
-#### Resources
+## Resources
 - http://s3.crashworks.org/gdc15/ElanRuskin_SunsetOverdrive_Streaming_notes.pdf
 - https://web.archive.org/web/20160315045908/http://scottbilas.com/files/2003/gdc_san_jose/continuous_world_paper.pdf
 - https://www.gamasutra.com/view/feature/130186/streaming_for_next_generation_games.php
+- https://gafferongames.com/
+- https://google.github.io/filament/Filament.md.html
+- https://assetstore.unity.com/packages/tools/particles-effects/aura-volumetric-lighting-111664
