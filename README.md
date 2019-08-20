@@ -9,6 +9,7 @@ A 2D game! About what? We're not quite sure. But what we know is that we have a 
 ## Guidelines
 - Attempt to document your changes. This will allow new people to jump in and get an understanding of the systems that have been put in place.
 - Share. Share your brain smarts with others, this project is an attempt to increase collaboration and overall studio knowledge.
+- Prefer to submit code through pull requests. This will allow the interested to ask questions about your changes and to also learn from them.
 
 ## Proposed Features
 - Networking
