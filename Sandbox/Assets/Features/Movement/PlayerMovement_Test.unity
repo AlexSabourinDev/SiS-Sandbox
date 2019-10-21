@@ -453,3 +453,8 @@ MonoBehaviour:
   m_ForwardAcceleration: 40
   m_TurnAcceleration: 18
   m_MaxHorizontalVelocity: 10
+  m_HighJumpHeight: 1
+  m_HopJumpHeight: 0.2
+  m_HighJumpTime: 1
+  m_HopJumpTime: 0.1
+  m_JumpWindow: 0.1
