@@ -8,12 +8,17 @@ using UnityEngine;
 [RequireComponent(typeof(Rigidbody2D))]
 public class PlayerMovement : MonoBehaviour
 {
+    enum JumpType
+    {
+        PressJump,
+        ReleaseJump,
+        None,
+    }
+
     enum InputType
     {
         Right,
         Left,
-        PressJump,
-        ReleaseJump,
         None,
     }
 
@@ -47,23 +52,29 @@ public class PlayerMovement : MonoBehaviour
 
     private float m_TimeAtLastJumpStart = -1.0f;
 
-    private InputType ReadInput()
+    private JumpType ReadJump()
     {
-        if(Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow))
+        if(Input.GetKeyDown(KeyCode.Space))
         {
-            return InputType.Right;
-        }
-        else if(Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow))
-        {
-            return InputType.Left;
-        }
-        else if(Input.GetKeyDown(KeyCode.Space))
-        {
-            return InputType.PressJump;
+            return JumpType.PressJump;
         }
         else if(Input.GetKeyUp(KeyCode.Space))
         {
-            return InputType.ReleaseJump;
+            return JumpType.ReleaseJump;
+        }
+
+        return JumpType.None;
+    }
+
+    private InputType ReadInput()
+    {
+        if(Input.GetKey(KeyCode.RightArrow) || Input.GetKey(KeyCode.D))
+        {
+            return InputType.Right;
+        }
+        else if(Input.GetKey(KeyCode.LeftArrow) || Input.GetKey(KeyCode.A))
+        {
+            return InputType.Left;
         }
 
         return InputType.None;
@@ -107,7 +118,8 @@ public class PlayerMovement : MonoBehaviour
 
         // Jumping
         {
-            if(input == InputType.PressJump)
+            JumpType jumpType = ReadJump();
+            if(jumpType == JumpType.PressJump)
             {
                 m_TimeAtLastJumpStart = Time.time;
             }
@@ -115,7 +127,7 @@ public class PlayerMovement : MonoBehaviour
             if(m_TimeAtLastJumpStart > 0.0f)
             {
                 float jumpTime = Time.time - m_TimeAtLastJumpStart;
-                if(input == InputType.ReleaseJump || jumpTime >= m_JumpWindow)
+                if(jumpType == JumpType.ReleaseJump)
                 {
                     float height = m_HighJumpHeight;
                     if(jumpTime < m_JumpWindow)
