@@ -11,6 +11,7 @@ public class PlayerMovement : MonoBehaviour
     enum JumpType
     {
         PressJump,
+        HoldJump,
         ReleaseJump,
         None,
     }
@@ -42,23 +43,30 @@ public class PlayerMovement : MonoBehaviour
     private float m_HighJumpHeight = 1.0f;
 
     [SerializeField]
-    private float m_HopJumpHeight = 0.1f;
+    private float m_LowJumpHeight = 0.3f;
 
     [SerializeField]
-    private float m_JumpWindow = 0.1f; // TODO: Rename
+    private float m_JumpWindow = 0.1f;
 
     MovementState m_MovementState;
     private Rigidbody2D m_Rigidbody;
+    private SpriteRenderer m_Sprite;
+    private float m_InitialVelocity;
+
 
     private float m_TimeAtLastJumpStart = -1.0f;
 
     private JumpType ReadJump()
-    {
-        if(Input.GetKeyDown(KeyCode.Space))
+    { 
+        if(Input.GetKeyDown(KeyCode.Space) || Input.GetButtonDown("Jump"))
         {
             return JumpType.PressJump;
         }
-        else if(Input.GetKeyUp(KeyCode.Space))
+        else if(Input.GetKey(KeyCode.Space) || Input.GetButton("Jump"))
+        {
+            return JumpType.HoldJump;
+        }
+        else if(Input.GetKeyUp(KeyCode.Space) || Input.GetButtonUp("Jump"))
         {
             return JumpType.ReleaseJump;
         }
@@ -114,6 +122,10 @@ public class PlayerMovement : MonoBehaviour
                 Vector2 acceleration = Vector2.right * desiredAcceleration * desiredDirection;
                 m_Rigidbody.AddForce(acceleration * m_Rigidbody.mass);
             }
+
+            if (desiredDirection != 0.0f){
+                transform.localScale = desiredDirection > 0? Vector3.one : new Vector3(-1, 1, 1);
+            }
         }
 
         // Jumping
@@ -122,26 +134,26 @@ public class PlayerMovement : MonoBehaviour
             if(jumpType == JumpType.PressJump)
             {
                 m_TimeAtLastJumpStart = Time.time;
+
+                float jumpVelocity = Mathf.Sqrt(-2.0f * Physics2D.gravity.y * m_HighJumpHeight);
+                Vector2 velocity = m_Rigidbody.velocity;
+                velocity.y = jumpVelocity;
+                m_InitialVelocity = jumpVelocity;
+                m_Rigidbody.velocity = velocity;
+                m_Rigidbody.gravityScale = 1.0f;
             }
             
-            if(m_TimeAtLastJumpStart > 0.0f)
+            if(m_TimeAtLastJumpStart > 0.0f && jumpType != JumpType.HoldJump && jumpType != JumpType.PressJump)
             {
-                float jumpTime = Time.time - m_TimeAtLastJumpStart;
-                if(jumpType == JumpType.ReleaseJump)
-                {
-                    float height = m_HighJumpHeight;
-                    if(jumpTime < m_JumpWindow)
-                    {
-                        height = m_HopJumpHeight;
-                    }
+                float newGravity = -3.0f*(m_InitialVelocity*m_InitialVelocity)/(2.0f*m_LowJumpHeight);
+                m_Rigidbody.gravityScale = newGravity / Physics2D.gravity.y;
 
-                    float jumpVelocity = Mathf.Sqrt(-2.0f * Physics2D.gravity.y * height);
-                    Vector2 velocity = m_Rigidbody.velocity;
-                    velocity.y = jumpVelocity;
-                    m_Rigidbody.velocity = velocity;
+                m_TimeAtLastJumpStart = 0.0f;
+            }
 
-                    m_TimeAtLastJumpStart = -1.0f;
-                }
+            if(m_Rigidbody.velocity.y <= 0.0f)
+            {
+                m_Rigidbody.gravityScale = 1.0f;
             }
         }
     }
