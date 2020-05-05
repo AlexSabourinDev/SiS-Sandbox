@@ -175,6 +175,9 @@ namespace SiS
         public float m_Deceleration;
         public float m_HighJumpHeight;
         public float m_LowJumpHeight;
+        public float m_defaultGravityScale;
+        public float m_gravityScaleFastFallMultiplier;
+        public float m_terminalVelocity;
     }
 
     [RequireComponent(typeof(Rigidbody2D))]
@@ -193,7 +196,10 @@ namespace SiS
             m_MaxHorizontalVelocity = 5.0f,
             m_Deceleration = 20.0f,
             m_HighJumpHeight = 1.0f,
-            m_LowJumpHeight = 0.3f
+            m_LowJumpHeight = 0.3f,
+            m_gravityScaleFastFallMultiplier = 2f,
+            m_defaultGravityScale = 3f,
+            m_terminalVelocity = -10.0f
         };
 
         [SerializeField] Rect m_AttackBox;
@@ -214,6 +220,10 @@ namespace SiS
         private void Update()
         {
             m_ActionInterpreter.InterpretActions();
+        }
+
+        private void FixedUpdate()
+        {
             ProcessMovement();
         }
 
@@ -227,17 +237,19 @@ namespace SiS
         void ProcessMovement()
         {
             {
-                if(m_TimeAtLastJumpStart > 0.0f && (m_MovementState & MovementState.Jumping) == 0)
-                {
-                    float newGravity = -3.0f*(m_InitialVelocity*m_InitialVelocity)/(2.0f*m_Movement.m_LowJumpHeight);
-                    m_Rigidbody.gravityScale = newGravity / Physics2D.gravity.y;
-
+                if(m_TimeAtLastJumpStart > 0.0f && (m_MovementState & MovementState.Jumping) == 0) // TODO: Reverse this, so that the default is when we're not holding Jump.
+                {                                                                                       // Holding Jump should give us more floatiness.
+                    //float newGravity = -3.0f*(m_InitialVelocity*m_InitialVelocity)/(2.0f*m_Movement.m_LowJumpHeight);
+                    //m_Rigidbody.gravityScale = newGravity / Physics2D.gravity.y;
+                    m_Rigidbody.gravityScale = m_Movement.m_defaultGravityScale * m_Movement.m_gravityScaleFastFallMultiplier;
                     m_TimeAtLastJumpStart = 0.0f;
                 }
 
                 if(m_Rigidbody.velocity.y <= 0.0f)
                 {
-                    m_Rigidbody.gravityScale = 1.0f;
+                    //m_Rigidbody.gravityScale = m_Movement.m_defaultGravityScale; TODO -> put this in a "Landing" function
+                    float yVelocity = Mathf.Max(m_Rigidbody.velocity.y, m_Movement.m_terminalVelocity);
+                    m_Rigidbody.velocity = new Vector2(m_Rigidbody.velocity.x, yVelocity);
                 }
             }
 
@@ -314,7 +326,7 @@ namespace SiS
                         velocity.y = jumpVelocity;
                         m_InitialVelocity = jumpVelocity;
                         m_Rigidbody.velocity = velocity;
-                        m_Rigidbody.gravityScale = 1.0f;
+                        m_Rigidbody.gravityScale = m_Movement.m_defaultGravityScale;
 
                          m_MovementState |= MovementState.Jumping;
                     }
