@@ -18,9 +18,46 @@ namespace SiS
         public bool m_ActionOn;
     }
 
+    internal struct Combo
+    {
+        public ActionType[] Actions;
+        public float[] Deltas;
+        public Func<ActionEvent> OnCombo;
+    }
+
     [Serializable]
     class ActionInterpreter
     {
+        Combo[] Combos = new Combo[]
+        {
+            new Combo()
+            {
+                Actions = new ActionType[]{ActionType.Forward, ActionType.Back, ActionType.Jump},
+                Deltas = new float[]{float.MaxValue,0.1f,0.1f},
+                OnCombo = ()=>
+                {
+                    return new ActionEvent()
+                    {
+                        m_TimeStamp = Time.time,
+                        m_Type = ActionType.SuperJump
+                    };
+                }
+            },
+            new Combo()
+            {
+                Actions = new ActionType[]{ActionType.Back, ActionType.Forward, ActionType.Jump},
+                Deltas = new float[]{float.MaxValue,0.1f,0.1f},
+                OnCombo = ()=>
+                {
+                    return new ActionEvent()
+                    {
+                        m_TimeStamp = Time.time,
+                        m_Type = ActionType.SuperJump
+                    };
+                }
+            }
+        };
+
         enum InputType
         {
             Jump, Right, Left, Attack, None
@@ -34,6 +71,29 @@ namespace SiS
         int m_ActionEnd = 0;
 
         Player m_Player;
+
+        internal ActionEvent ActionFromBack(int i)
+        {
+            int index = m_ActionEnd - (i + 1);
+            if(index < 0)
+            {
+                index = m_MaxActionCount + index;
+            }
+            return m_Actions[index];
+        }
+
+        private void AddAction(ActionEvent action)
+        {
+            // Only On Actions are added to our action queue
+            if(action.m_ActionOn)
+            {
+                int nextIndex = (m_ActionEnd + 1) % m_MaxActionCount;
+                Debug.Assert(nextIndex != m_ActionStart); // Reached the end of our buffer. Do we want to regrow it?
+                    
+                m_Actions[m_ActionEnd] = action;
+                m_ActionEnd = nextIndex;
+            }
+        }
 
         internal void Init(Player player)
         {
@@ -121,35 +181,41 @@ namespace SiS
 
             foreach(ActionEvent action in newActions)
             {
-                int nextIndex = (m_ActionEnd + 1) % m_MaxActionCount;
-                Debug.Assert(nextIndex != m_ActionStart); // Reached the end of our buffer. Do we want to regrow it?
-                
-                m_Actions[m_ActionEnd] = action;
-                m_ActionEnd = nextIndex;
+                AddAction(action);
             }
 
             // Filter our actions to determine what combo we're activating
             {
-                Func<int, ActionEvent> backAction = (int i)=>{ if(i < 0) { i = m_MaxActionCount + i; } return m_Actions[i]; };
-                bool isSuperJump =
-                      (backAction(m_ActionEnd-1).m_Type == ActionType.Jump && backAction(m_ActionEnd-1).m_ActionOn
-                    && backAction(m_ActionEnd-2).m_Type == ActionType.Back && backAction(m_ActionEnd-2).m_ActionOn
-                    && backAction(m_ActionEnd-3).m_Type == ActionType.Forward && backAction(m_ActionEnd-3).m_ActionOn
-                    && Time.time - backAction(m_ActionEnd-3).m_TimeStamp > 0.5f);
-
-                if(isSuperJump)
+                foreach(Combo combo in Combos)
                 {
-                    ActionEvent action = new ActionEvent()
+                    bool comboMet = true;
+                    
+                    float timeAtLastEvent = Time.time;
+                    for(int i = 0; i < combo.Actions.Length; i++)
                     {
-                        m_TimeStamp = Time.time,
-                        m_Type = ActionType.SuperJump
-                    };
-                    newActions.Add(action);
+                        ActionEvent action = ActionFromBack(i);
 
-                    int nextIndex = (m_ActionEnd + 1) % m_MaxActionCount;
-                    Debug.Assert(nextIndex != m_ActionStart); // Reached the end of our buffer. Do we want to regrow it?
-                    m_Actions[m_ActionEnd] = action;
-                    m_ActionEnd = nextIndex;
+                        ActionType comboType = combo.Actions[combo.Actions.Length - i - 1];
+                        if(comboType != action.m_Type)
+                        {
+                            comboMet = false;
+                            break;
+                        }
+
+                        if(timeAtLastEvent - action.m_TimeStamp > combo.Deltas[combo.Deltas.Length - i - 1])
+                        {
+                            comboMet = false;
+                            break;
+                        }
+                        timeAtLastEvent = action.m_TimeStamp;
+                    }
+
+                    if(comboMet)
+                    {
+                        ActionEvent newAction = combo.OnCombo();
+                        newActions.Add(newAction);
+                        AddAction(newAction);
+                    }
                 }
 
                 // TODO: We want to do some filtering here
@@ -199,6 +265,7 @@ namespace SiS
         [SerializeField] Rect m_AttackBox;
         [SerializeField] ActionInterpreter m_ActionInterpreter = new ActionInterpreter();
 
+        private SpriteAnim m_Animator;
         private Rigidbody2D m_Rigidbody;
         private float m_InitialVelocity;
 
@@ -208,12 +275,25 @@ namespace SiS
         private void Awake()
         {
             m_Rigidbody = GetComponent<Rigidbody2D>();
+            m_Animator = GetComponent<SpriteAnim>();
             m_ActionInterpreter.Init(this);
         }
 
         private void Update()
         {
             m_ActionInterpreter.InterpretActions();
+            if((m_MovementState & (MovementState.Forward | MovementState.Back)) != 0)
+            {
+                m_Animator.Play(0);
+            }
+            else
+            {
+                m_Animator.Play(1);
+            }
+        }
+
+        private void FixedUpdate()
+        {
             ProcessMovement();
         }
 
@@ -240,7 +320,6 @@ namespace SiS
                     m_Rigidbody.gravityScale = 1.0f;
                 }
             }
-
 
             if((m_MovementState & (MovementState.Forward | MovementState.Back)) != 0)
             {

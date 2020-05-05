@@ -1303,6 +1303,7 @@ GameObject:
   - component: {fileID: 1335118902}
   - component: {fileID: 1335118901}
   - component: {fileID: 1335118905}
+  - component: {fileID: 1335118906}
   m_Layer: 0
   m_Name: Mistofelees
   m_TagString: Untagged
@@ -1448,6 +1449,32 @@ MonoBehaviour:
   m_ActionInterpreter:
     m_FilterWindow: 1
     m_MaxActionCount: 100
+--- !u!114 &1335118906
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1335118900}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f484dfec60ebd9443a03c8a4cd942102, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_SpriteRenderer: {fileID: 1335118903}
+  m_Animations:
+  - m_Sprites:
+    - {fileID: 2776798925759819348, guid: 034785343b28434488f606e33d06c512, type: 3}
+    - {fileID: 8063491714252653128, guid: 034785343b28434488f606e33d06c512, type: 3}
+    - {fileID: 2883638279859654835, guid: 034785343b28434488f606e33d06c512, type: 3}
+    - {fileID: 3194337066242064489, guid: 034785343b28434488f606e33d06c512, type: 3}
+    - {fileID: -1297892484405469893, guid: 034785343b28434488f606e33d06c512, type: 3}
+    m_Framerate: 0.1
+    m_Loop: 1
+  - m_Sprites:
+    - {fileID: 21300000, guid: bb29bc2dbe9f8c140af5ce5b7e092550, type: 3}
+    m_Framerate: 5
+    m_Loop: 0
 --- !u!1 &1404085695
 GameObject:
   m_ObjectHideFlags: 0
